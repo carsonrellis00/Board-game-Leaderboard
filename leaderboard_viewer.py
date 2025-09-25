@@ -9,6 +9,27 @@ env = trueskill.TrueSkill(draw_probability=0.0)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LEADERBOARD_DIR = os.path.join(BASE_DIR, "leaderboards")
 
+# ---- Event Banner ----
+EVENT_FILE = os.path.join(BASE_DIR, "event.json")
+
+def load_event():
+    if os.path.exists(EVENT_FILE):
+        with open(EVENT_FILE, "r") as f:
+            data = json.load(f)
+            return data.get("next_event", "")
+    return ""
+
+next_event = load_event()
+if next_event:
+    st.markdown(
+        f"""
+        <div style="background-color:#4CAF50;padding:12px;border-radius:8px;margin-bottom:15px">
+            <h2 style="color:white;text-align:center;">🎲 Next Board Game Night: {next_event} 🎲</h2>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 def list_games():
     existing_files = os.listdir(LEADERBOARD_DIR)
     existing_games = sorted(list(set(f.split("_leaderboard.json")[0] for f in existing_files if f.endswith("_leaderboard.json"))))

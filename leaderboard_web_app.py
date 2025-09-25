@@ -11,6 +11,27 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LEADERBOARD_DIR = os.path.join(BASE_DIR, "leaderboards")
 os.makedirs(LEADERBOARD_DIR, exist_ok=True)
 
+# ---- Event Banner ----
+EVENT_FILE = os.path.join(BASE_DIR, "event.json")
+
+def load_event():
+    if os.path.exists(EVENT_FILE):
+        with open(EVENT_FILE, "r") as f:
+            data = json.load(f)
+            return data.get("next_event", "")
+    return ""
+
+next_event = load_event()
+if next_event:
+    st.markdown(
+        f"""
+        <div style="background-color:#4CAF50;padding:12px;border-radius:8px;margin-bottom:15px">
+            <h2 style="color:white;text-align:center;">🎲 Next Board Game Night: {next_event} 🎲</h2>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 # ---- Functions for multi-game support ----
 def list_games():
     existing_files = os.listdir(LEADERBOARD_DIR)
