@@ -3,6 +3,13 @@ import json
 import os
 from datetime import datetime
 
+st.set_page_config(
+    page_title="Home",
+    page_icon="🎲"
+)
+
+st.title("🎲 Board Game Leaderboard Home")
+
 # ---- Paths ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EVENT_FILE = os.path.join(BASE_DIR, "event.json")
@@ -39,3 +46,4 @@ st.markdown("""
 
 st.markdown("---")
 st.info("Use the sidebar to navigate between pages.")
+
