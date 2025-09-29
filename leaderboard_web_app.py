@@ -2,6 +2,11 @@ import streamlit as st
 import json
 import os
 from datetime import datetime
+
+# ---- Paths ----
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+EVENT_FILE = os.path.join(BASE_DIR, "event.json")
+
 # ---- Load Next Event ----
 next_event = ""
 if os.path.exists(EVENT_FILE):
