@@ -46,10 +46,10 @@ if st.button("Add Player"):
     elif new_player in leaderboard:
         st.warning(f"{new_player} already exists.")
     else:
-            default_mu = env.mu  # TrueSkill default if first player
-        leaderboard[new_player] = env.Rating(mu=default_mu, sigma=DEFAULT_SIGMA)
+        # Default rating = TrueSkill default
+        leaderboard[new_player] = env.Rating(mu=env.mu, sigma=DEFAULT_SIGMA)
         save_leaderboard(leaderboard)
-        st.success(f"{new_player} added with μ={default_mu:.2f} and σ={DEFAULT_SIGMA:.2f}.")
+        st.success(f"{new_player} added with μ={env.mu:.2f} and σ={DEFAULT_SIGMA:.2f}.")
 
 # Remove player
 st.subheader("Remove Player")
@@ -59,4 +59,3 @@ if st.button("Remove Player"):
         del leaderboard[remove_player]
         save_leaderboard(leaderboard)
         st.success(f"{remove_player} removed.")
-
