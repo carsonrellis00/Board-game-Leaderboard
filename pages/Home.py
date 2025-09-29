@@ -28,13 +28,13 @@ st.markdown("---")
 
 # Page descriptions
 st.header("App Pages & Features")
-
+st.write("Welcome! Use the sidebar to navigate:")
 st.markdown("""
 - **Manage Players**: Add or remove players globally. All pages reference this list.
 - **Manual Game Entry**: Record individual or team-based games for any selected game.
-- **Leaderboard**: View rankings for each game based on TrueSkill ratings.
-- **Match History**: See past matches with timestamps and results.
-- **Matchmaking**: Generate balanced teams and record team match results easily.
+- **🏆Leaderboard**: View rankings for each game based on TrueSkill ratings.
+- **📜Match History**: See past matches with timestamps and results.
+- **⚔️Matchmaking**: Generate balanced teams and record team match results easily.
 """)
 
 st.markdown("---")
