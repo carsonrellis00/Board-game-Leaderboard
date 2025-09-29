@@ -22,11 +22,6 @@ if os.path.exists(EVENT_FILE):
         next_event = data.get("next_event", "")
 else:
     next_event = "Set your next event in event.json"
-
-# ---- Streamlit UI ----
-st.set_page_config(page_title="Board Game Leaderboard", page_icon="🎲")
-st.title("🎲 Board Game Leaderboard")
-
 # Banner for next game night
 if next_event:
     st.markdown(f"### 📅 Next Board Game Night: {next_event}")
@@ -46,4 +41,5 @@ st.markdown("""
 
 st.markdown("---")
 st.info("Use the sidebar to navigate between pages.")
+
 
