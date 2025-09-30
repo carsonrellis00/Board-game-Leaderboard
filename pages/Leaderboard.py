@@ -30,13 +30,20 @@ for match in history.get("matches", []):
         for p in team:
             wins_counter[p] = wins_counter.get(p, 0) + 1
 
-# ---- Prepare dataframe ----
+# ---- Prepare dataframe safely ----
 rows = []
 for name, rating in leaderboard.items():
+    if isinstance(rating, dict):
+        mu = rating.get("mu", 25.0)
+        sigma = rating.get("sigma", 8.333)
+    else:
+        # fallback if rating is not a dict
+        mu = float(rating) if isinstance(rating, (int, float)) else 25.0
+        sigma = 8.333
     rows.append({
         "Player": name,
-        "Mu": rating.get("mu", 25.0),
-        "Sigma": rating.get("sigma", 8.333),
+        "Mu": mu,
+        "Sigma": sigma,
         "Wins": wins_counter.get(name, 0)
     })
 
@@ -70,3 +77,4 @@ if admin_password == "YOUR_SECRET_PASSWORD":  # Replace with your password
         history = {"matches": []}
         save_leaderboard_to_git(game, leaderboard, commit_message=f"Wipe {game} leaderboard")
         st.success(f"{game} leaderboard wiped!")
+
