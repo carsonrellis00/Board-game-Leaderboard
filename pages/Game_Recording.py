@@ -1,6 +1,6 @@
 import streamlit as st
-import trueskill
 from datetime import datetime
+import trueskill
 from GitLab_Persistence import (
     load_players_from_git,
     save_players_to_git,
@@ -15,7 +15,6 @@ st.set_page_config(page_title="Record Game", page_icon="✏️")
 st.title("✏️ Record a Game (Individual & Team)")
 
 # --- Select game ---
-# Gather games from leaderboards directory
 all_players = load_players_from_git()
 if not all_players:
     st.warning("No players found. Add players first in Manage Players.")
@@ -40,8 +39,17 @@ if not game_name:
     st.stop()
 
 # Load leaderboard and history
-leaderboard = load_leaderboard_from_git(game_name)
-history = load_history_from_git(game_name)
+try:
+    leaderboard = load_leaderboard_from_git(game_name)
+except Exception as e:
+    st.error(f"Failed to load leaderboard: {e}")
+    leaderboard = {}
+
+try:
+    history = load_history_from_git(game_name)
+except Exception as e:
+    st.error(f"Failed to load history: {e}")
+    history = {"matches": []}
 
 # --- Select mode ---
 mode = st.radio("Select mode", options=["Individual", "Team"])
@@ -56,26 +64,34 @@ if mode == "Individual":
             st.warning("Select at least two players.")
         else:
             try:
-                ratings = []
-                for name in ordered_players:
-                    p = leaderboard.get(name)
-                    ratings.append(env.Rating(mu=p["mu"], sigma=p["sigma"]) if p else env.Rating())
+                ratings = [
+                    env.Rating(mu=leaderboard[p]["mu"], sigma=leaderboard[p]["sigma"]) 
+                    if p in leaderboard else env.Rating() for p in ordered_players
+                ]
                 ranks = list(range(len(ratings)))
                 new_ratings = env.rate(ratings, ranks=ranks)
+
                 # Update leaderboard
                 for name, r in zip(ordered_players, new_ratings):
                     leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
+
                 # Append to history
                 history.setdefault("matches", []).append({
                     "timestamp": datetime.utcnow().isoformat(),
                     "type": "individual",
                     "results": ordered_players
                 })
-                save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record individual match for {game_name}")
-                save_history_to_git(game_name, history, commit_message=f"Add individual match to {game_name} history")
-                st.success("Individual game recorded and pushed to GitLab.")
+
+                # Save to GitLab with error handling
+                try:
+                    save_leaderboard_to_git(game_name, leaderboard)
+                    save_history_to_git(game_name, history)
+                    st.success("Individual game recorded and pushed to GitLab.")
+                except Exception as e:
+                    st.error(f"Failed to save to GitLab: {e}")
+
             except Exception as e:
-                st.error(f"Failed to record game: {e}")
+                st.error(f"Failed to calculate TrueSkill ratings: {e}")
 
 # --- Team Game ---
 else:
@@ -87,22 +103,20 @@ else:
     # Option to auto-generate balanced teams
     auto_balance = st.checkbox("Auto-generate balanced teams")
     if auto_balance:
-        # Generate best balanced split
         from itertools import combinations
         import math
 
-        def team_average_rating(team):
-            ratings = [leaderboard.get(n, {}).get("mu", env.Rating().mu) for n in team]
-            return sum(ratings)/len(ratings)
+        def team_avg(team):
+            return sum([leaderboard.get(p, {}).get("mu", env.Rating().mu) for p in team])/len(team)
 
         best_diff = math.inf
         best_pair = None
         n = len(selected_players)
-        half = n//2
+        half = n // 2
         for combo in combinations(selected_players, half):
             team_a = combo
-            team_b = tuple(p for p in selected_players if p not in team_a)
-            diff = abs(team_average_rating(team_a) - team_average_rating(team_b))
+            team_b = [p for p in selected_players if p not in team_a]
+            diff = abs(team_avg(team_a) - team_avg(team_b))
             if diff < best_diff:
                 best_diff = diff
                 best_pair = (team_a, team_b)
@@ -127,10 +141,12 @@ else:
                 ratings_b = [env.Rating(**leaderboard.get(n, {})) for n in team_b]
                 ranks = [0,1] if winner=="Team A" else [1,0]
                 new_team_ratings = env.rate([ratings_a, ratings_b], ranks=ranks)
+
                 for name, r in zip(team_a, new_team_ratings[0]):
                     leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
                 for name, r in zip(team_b, new_team_ratings[1]):
                     leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
+
                 # Append to history
                 history.setdefault("matches", []).append({
                     "timestamp": datetime.utcnow().isoformat(),
@@ -139,8 +155,14 @@ else:
                     "team_b": list(team_b),
                     "winner": winner
                 })
-                save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record team match for {game_name}")
-                save_history_to_git(game_name, history, commit_message=f"Add team match to {game_name} history")
-                st.success("Team game recorded and pushed to GitLab.")
+
+                # Save to GitLab with error handling
+                try:
+                    save_leaderboard_to_git(game_name, leaderboard)
+                    save_history_to_git(game_name, history)
+                    st.success("Team game recorded and pushed to GitLab.")
+                except Exception as e:
+                    st.error(f"Failed to save to GitLab: {e}")
+
             except Exception as e:
-                st.error(f"Failed to record team game: {e}")
+                st.error(f"Failed to calculate TrueSkill ratings: {e}")
