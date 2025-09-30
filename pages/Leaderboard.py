@@ -38,7 +38,7 @@ st.header("⚠️ Admin: Wipe Game Leaderboard & History")
 
 admin_pass = st.text_input("Enter admin name to unlock wipe", type="password")
 
-if admin_pass == "YOUR_ADMIN_NAME":  # replace with your name or check via secret
+if admin_pass == "Carson":  # replace with your name or check via secret
     wipe_game = st.selectbox("Select game to wipe", options=game_names)
     if st.button("Wipe Leaderboard & History"):
         try:
@@ -51,3 +51,4 @@ if admin_pass == "YOUR_ADMIN_NAME":  # replace with your name or check via secre
             st.error(f"Failed to wipe: {e}")
 else:
     st.info("Enter admin name to access leaderboard wipe functionality.")
+
