@@ -3,7 +3,7 @@ import streamlit as st
 st.set_page_config(page_title="Home", page_icon="🎲", layout="wide")
 
 # ---- Main Page ----
-st.title("🎲 Board Game Leaderboard Hub")
+st.title("🎲 Board Game Leaderboard Hub 🎲")
 st.write("Welcome! Use the sidebar to navigate:")
 st.markdown("""
 - 👥 Manage Players
@@ -25,5 +25,6 @@ else:
 
 if next_event:
     st.markdown(f"### 📅 Next Board Game Night: {next_event}")
+
 
 
