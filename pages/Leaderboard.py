@@ -32,20 +32,23 @@ leaderboard = load_leaderboard_from_git(selected_game)
 history = load_history_from_git(selected_game)
 
 # ---- Prepare Leaderboard DataFrame ----
-if leaderboard:
-    df = pd.DataFrame([
-        {
-            "Player": name,
-            "Mu": data.get("mu", 25.0),
-            "Sigma": data.get("sigma", 8.333),
-            "Wins": data.get("wins", 0)
-        }
-        for name, data in leaderboard.items()
-    ])
-    df = df.sort_values(by="Mu", ascending=False).reset_index(drop=True)
-    df.insert(0, "Rank", range(1, len(df) + 1))
-else:
-    df = pd.DataFrame(columns=["Rank", "Player", "Mu", "Sigma", "Wins"])
+rows = []
+for name, data in leaderboard.items():
+    if isinstance(data, dict):
+        mu = data.get("mu", 25.0)
+        sigma = data.get("sigma", 8.333)
+        wins = data.get("wins", 0)
+    else:
+        # Handle corrupted or old-format entries
+        mu = 25.0
+        sigma = 8.333
+        wins = 0
+    rows.append({"Player": name, "Mu": mu, "Sigma": sigma, "Wins": wins})
+
+df = pd.DataFrame(rows)
+df = df.sort_values(by="Mu", ascending=False).reset_index(drop=True)
+df.insert(0, "Rank", range(1, len(df) + 1))
+
 
 # ---- Display Leaderboard ----
 st.subheader(f"Leaderboard: {selected_game}")
@@ -84,3 +87,4 @@ if current_user == ADMIN_USERNAME:
         save_history_to_git(selected_game, history, commit_message=f"Clear {selected_game} match history by admin")
         
         st.success(f"{selected_game} leaderboard and history wiped.")
+
