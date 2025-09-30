@@ -1,30 +1,34 @@
+# pages/Game_Recording.py
 import streamlit as st
-from datetime import datetime
 import trueskill
+from datetime import datetime
 from GitLab_Persistence import (
     load_players_from_git,
     load_leaderboard_from_git,
     save_leaderboard_to_git,
     load_history_from_git,
     save_history_to_git,
-    gitlab_list_leaderboards_dir,
-    env
+    gitlab_list_leaderboards_dir
 )
 
-st.set_page_config(page_title="Game Recording & Matchmaking", page_icon="🎮")
-st.title("🎮 Game Recording & Matchmaking")
+st.set_page_config(page_title="Record Game / Matchmaking", page_icon="✏️")
+st.title("✏️ Record Game / Matchmaking")
+
+# TrueSkill environment
+env = trueskill.TrueSkill(draw_probability=0)
 
 # --- Load players ---
-all_players = load_players_from_git()
-if not all_players:
-    st.warning("No players found. Add players first in Player Manager.")
+players = load_players_from_git()
+if not players:
+    st.warning("No players found. Add players in 'Manage Players' first.")
     st.stop()
 
-# --- Load games ---
+# --- Select or create game ---
 files = gitlab_list_leaderboards_dir()
-game_names = sorted(list({fn.replace("_leaderboard.json","").replace("_history.json","") 
-                          for fn in files if fn.endswith(".json")}))
-game_option = st.selectbox("Select game (or type new)", options=["<New Game>"] + game_names)
+existing_games = sorted(list({fn.replace("_leaderboard.json","").replace("_history.json","") 
+                              for fn in files if fn.endswith(".json")}))
+game_option = st.selectbox("Select game (or type new name)", options=["<New Game>"] + existing_games)
+
 if game_option == "<New Game>":
     game_name_input = st.text_input("New game name")
     game_name = game_name_input.strip() if game_name_input else None
@@ -32,112 +36,99 @@ else:
     game_name = game_option
 
 if not game_name:
-    st.info("Enter or select a game name to record matches.")
+    st.info("Pick or type a game name to record matches for.")
     st.stop()
 
-# --- Load leaderboard and history ---
-leaderboard = load_leaderboard_from_git(game_name) or {}
-history = load_history_from_git(game_name) or {"matches": []}
+st.subheader(f"Recording for game: {game_name}")
 
-# --- Tabs for Individual / Team ---
-tab1, tab2 = st.tabs(["Individual Game", "Team Game / Matchmaking"])
+# --- Load leaderboard & history ---
+leaderboard = load_leaderboard_from_git(game_name)
+history = load_history_from_git(game_name)
 
-# ---------------- Individual Game ----------------
-with tab1:
-    ordered_players = st.multiselect(
-        "Select players in finishing order (winner first)", options=all_players
-    )
+tab_ind, tab_team = st.tabs(["Individual Game", "Team / Matchmaking"])
 
+# ---------- Individual Game ----------
+with tab_ind:
+    st.write("Select players in finishing order (winner first).")
+    selected_players = st.multiselect("Players", options=players)
+    
     if st.button("Record Individual Game"):
-        if len(ordered_players) < 2:
-            st.warning("Select at least two players.")
+        if len(selected_players) < 2:
+            st.warning("Select at least 2 players.")
         else:
             try:
-                ratings = [
-                    trueskill.Rating(**leaderboard.get(p, {})) if p in leaderboard else trueskill.Rating()
-                    for p in ordered_players
-                ]
-                ranks = list(range(len(ratings)))
+                # Prepare TrueSkill ratings
+                ratings = [env.Rating(mu=leaderboard.get(n, {}).get("mu",25),
+                                      sigma=leaderboard.get(n, {}).get("sigma",8.333)) 
+                           for n in selected_players]
+                ranks = list(range(len(ratings)))  # winner first
                 new_ratings = env.rate(ratings, ranks=ranks)
-
-                for name, r in zip(ordered_players, new_ratings):
+                
+                # Update leaderboard
+                for name, r in zip(selected_players, new_ratings):
                     leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
-
+                
+                # Update history
                 history.setdefault("matches", []).append({
                     "timestamp": datetime.utcnow().isoformat(),
                     "type": "individual",
-                    "results": ordered_players
+                    "results": selected_players
                 })
-
-                save_leaderboard_to_git(game_name, leaderboard)
-                save_history_to_git(game_name, history)
-                st.success("Individual game recorded successfully!")
+                
+                # Push to GitLab
+                save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record individual match for {game_name}")
+                save_history_to_git(game_name, history, commit_message=f"Add match to {game_name} history")
+                
+                st.success("Individual game recorded!")
             except Exception as e:
                 st.error(f"Failed to record game: {e}")
 
-# ---------------- Team Game / Matchmaking ----------------
-with tab2:
-    selected_players = st.multiselect("Select players for team match", options=all_players)
-    if len(selected_players) < 2:
-        st.info("Select at least two players for team mode.")
-        st.stop()
-
-    if st.button("Generate Balanced Teams"):
-        # Fetch ratings
-        ratings = [trueskill.Rating(**leaderboard.get(p, {})) if p in leaderboard else trueskill.Rating()
-                   for p in selected_players]
-
-        # Sort by skill descending
-        sorted_players = [p for _, p in sorted(zip([r.mu for r in ratings], selected_players), reverse=True)]
-
-        # Alternate assigning to teams
-        team_a, team_b = [], []
-        for i, player in enumerate(sorted_players):
-            if i % 2 == 0:
-                team_a.append(player)
+# ---------- Team / Matchmaking ----------
+with tab_team:
+    st.write("Select all players for this team match.")
+    selected_team_players = st.multiselect("Players", options=players)
+    
+    if selected_team_players:
+        team_a = st.multiselect("Team A players", options=selected_team_players)
+        team_b = [p for p in selected_team_players if p not in team_a]
+        st.write("Team B:", ", ".join(team_b) if team_b else "(empty)")
+        winner = st.radio("Select Winning Team", options=["Team A", "Team B"])
+        
+        if st.button("Record Team Game"):
+            if not team_a or not team_b:
+                st.warning("Both teams must have at least one player.")
             else:
-                team_b.append(player)
-
-        st.session_state["team_a"] = team_a
-        st.session_state["team_b"] = team_b
-        st.success("Balanced teams generated!")
-
-    # Display teams
-    team_a = st.session_state.get("team_a", [])
-    team_b = st.session_state.get("team_b", [])
-    st.write("**Team A:**", ", ".join(team_a) if team_a else "(empty)")
-    st.write("**Team B:**", ", ".join(team_b) if team_b else "(empty)")
-
-    if team_a and team_b:
-        winner = st.radio("Select winning team", options=["Team A", "Team B"])
-        if st.button("Record Team Match"):
-            try:
-                ratings_a = [trueskill.Rating(**leaderboard.get(p, {})) if p in leaderboard else trueskill.Rating() for p in team_a]
-                ratings_b = [trueskill.Rating(**leaderboard.get(p, {})) if p in leaderboard else trueskill.Rating() for p in team_b]
-
-                ranks = [0,1] if winner=="Team A" else [1,0]
-                new_team_ratings = env.rate([ratings_a, ratings_b], ranks=ranks)
-
-                for name, r in zip(team_a, new_team_ratings[0]):
-                    leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
-                for name, r in zip(team_b, new_team_ratings[1]):
-                    leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
-
-                history.setdefault("matches", []).append({
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "type": "team",
-                    "team_a": team_a,
-                    "team_b": team_b,
-                    "winner": winner
-                })
-
-                save_leaderboard_to_git(game_name, leaderboard)
-                save_history_to_git(game_name, history)
-
-                st.success("Team match recorded successfully!")
-                # Clear teams from session
-                st.session_state["team_a"] = []
-                st.session_state["team_b"] = []
-
-            except Exception as e:
-                st.error(f"Failed to record team match: {e}")
+                try:
+                    ratings_a = [env.Rating(mu=leaderboard.get(n, {}).get("mu",25),
+                                             sigma=leaderboard.get(n, {}).get("sigma",8.333)) 
+                                 for n in team_a]
+                    ratings_b = [env.Rating(mu=leaderboard.get(n, {}).get("mu",25),
+                                             sigma=leaderboard.get(n, {}).get("sigma",8.333)) 
+                                 for n in team_b]
+                    
+                    # TrueSkill expects list of teams
+                    teams = [ratings_a, ratings_b]
+                    ranks = [0,1] if winner == "Team A" else [1,0]
+                    new_team_ratings = env.rate(teams, ranks=ranks)
+                    
+                    # Update leaderboard
+                    for names, ratings in zip([team_a, team_b], new_team_ratings):
+                        for n, r in zip(names, ratings):
+                            leaderboard[n] = {"mu": r.mu, "sigma": r.sigma}
+                    
+                    # Update history
+                    history.setdefault("matches", []).append({
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "type": "team",
+                        "team_a": team_a,
+                        "team_b": team_b,
+                        "winner": winner
+                    })
+                    
+                    # Push to GitLab
+                    save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record team match for {game_name}")
+                    save_history_to_git(game_name, history, commit_message=f"Add team match to {game_name} history")
+                    
+                    st.success("Team game recorded!")
+                except Exception as e:
+                    st.error(f"Failed to record team game: {e}")
