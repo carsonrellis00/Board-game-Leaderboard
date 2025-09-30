@@ -1,36 +1,41 @@
 import streamlit as st
-from GitLab_Persistence import load_history_from_git
+from GitLab_Persistence import (
+    gitlab_list_leaderboards_dir,
+    load_history_from_git
+)
 from datetime import datetime
 
 st.set_page_config(page_title="Match History", page_icon="📜")
 st.title("📜 Match History")
 
 # --- Select Game ---
-files = [fn.replace("_leaderboard.json", "").replace("_history.json", "") 
-         for fn in st.session_state.get("leaderboard_files", [])] \
-         if "leaderboard_files" in st.session_state else []
-game_names = sorted(list({fn for fn in files}))
-if not game_names:
-    st.info("No games found. Record a game first.")
+files = gitlab_list_leaderboards_dir()
+game_names = sorted(list({fn.replace("_leaderboard.json","").replace("_history.json","") for fn in files if fn.endswith(".json")}))
+game_name = st.selectbox("Select game", options=game_names)
+
+if not game_name:
+    st.info("No games found.")
     st.stop()
 
-game_option = st.selectbox("Select a game", options=game_names)
-history = load_history_from_git(game_option)
+history = load_history_from_git(game_name)
+matches = history.get("matches", [])
 
-if not history.get("matches"):
-    st.info("No matches recorded yet.")
+if not matches:
+    st.info(f"No match history for {game_name}.")
     st.stop()
 
-# --- Display matches ---
-st.subheader(f"{game_option} Match History")
-for match in reversed(history["matches"]):
-    timestamp = match.get("timestamp", "")
-    dt = datetime.fromisoformat(timestamp) if timestamp else ""
+st.subheader(f"Match History for {game_name}")
+
+# Display matches
+for i, match in enumerate(matches[::-1], start=1):
+    ts = datetime.fromisoformat(match["timestamp"]).strftime("%Y-%m-%d %H:%M UTC")
     if match["type"] == "individual":
-        players = ", ".join(match["results"])
-        st.write(f"{dt} - Individual match: {players}")
-    else:
-        team_a = ", ".join(match["team_a"])
-        team_b = ", ".join(match["team_b"])
-        winner = match["winner"]
-        st.write(f"{dt} - Team match | Team A: {team_a} vs Team B: {team_b} | Winner: {winner}")
+        st.markdown(f"**{i}. {ts}** — Individual: {', '.join(match['results'])}")
+    elif match["type"] == "team":
+        st.markdown(
+            f"**{i}. {ts}** — Team Match:\n"
+            f"- Team A: {', '.join(match['team_a'])}\n"
+            f"- Team B: {', '.join(match['team_b'])}\n"
+            f"- Winner: {match['winner']}"
+        )
+    st.markdown("---")
