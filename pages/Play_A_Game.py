@@ -45,12 +45,21 @@ leaderboard = load_leaderboard_from_git(game_name)
 history = load_history_from_git(game_name)
 
 # -------------------- Team Selection --------------------
-st.subheader(f"Recording for: {game_name}")
-selected_players = st.multiselect("Select players for this match", options=players)
+st.subheader("Teams")
+team_selection_method = st.radio(
+    "Select team setup method:",
+    options=["Auto Balance Teams", "Manual Teams"]
+)
 
-if not selected_players or len(selected_players) < 2:
-    st.info("Select at least two players.")
-    st.stop()
+if team_selection_method == "Manual Teams":
+    team_a = st.multiselect("Team A players", options=selected_players)
+    team_b = [p for p in selected_players if p not in team_a]
+    st.write("Team B:", ", ".join(team_b) if team_b else "(empty)")
+else:
+    team_a, team_b = auto_balance_teams(selected_players, leaderboard, env)
+    st.write("Team A:", ", ".join(team_a))
+    st.write("Team B:", ", ".join(team_b))
+
 
 # Auto-balance teams
 def auto_balance_teams(selected_players, leaderboard, env):
