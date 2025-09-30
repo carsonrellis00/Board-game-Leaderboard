@@ -1,33 +1,36 @@
 import streamlit as st
-import json
-from gitlab_utils import get_file_from_gitlab
+from GitLab_Persistence import load_history_from_git
+from datetime import datetime
 
-st.set_page_config(page_title="📜 Match History", page_icon="📜")
+st.set_page_config(page_title="Match History", page_icon="📜")
 st.title("📜 Match History")
 
-# ---- Select game ----
-game_name = st.text_input("Enter game name")
-if not game_name:
-    st.info("Enter a game name to view its history.")
+# --- Select Game ---
+files = [fn.replace("_leaderboard.json", "").replace("_history.json", "") 
+         for fn in st.session_state.get("leaderboard_files", [])] \
+         if "leaderboard_files" in st.session_state else []
+game_names = sorted(list({fn for fn in files}))
+if not game_names:
+    st.info("No games found. Record a game first.")
     st.stop()
 
-history_file = f"leaderboards/{game_name.lower().replace(' ', '_')}_history.json"
+game_option = st.selectbox("Select a game", options=game_names)
+history = load_history_from_git(game_option)
 
-# ---- Load history from GitLab ----
-history_data = get_file_from_gitlab(history_file)
-
-if not history_data:
-    st.warning(f"No history found for **{game_name}**.")
+if not history.get("matches"):
+    st.info("No matches recorded yet.")
     st.stop()
 
-try:
-    history = json.loads(history_data)
-except json.JSONDecodeError:
-    st.error("❌ Failed to parse match history.")
-    st.stop()
-
-# ---- Display ----
-for match in history:
-    st.markdown(f"**{match['timestamp']}** — {', '.join(match['players'])}")
-    st.write(f"Ranks: {match['ranks']}")
-    st.markdown("---")
+# --- Display matches ---
+st.subheader(f"{game_option} Match History")
+for match in reversed(history["matches"]):
+    timestamp = match.get("timestamp", "")
+    dt = datetime.fromisoformat(timestamp) if timestamp else ""
+    if match["type"] == "individual":
+        players = ", ".join(match["results"])
+        st.write(f"{dt} - Individual match: {players}")
+    else:
+        team_a = ", ".join(match["team_a"])
+        team_b = ", ".join(match["team_b"])
+        winner = match["winner"]
+        st.write(f"{dt} - Team match | Team A: {team_a} vs Team B: {team_b} | Winner: {winner}")
