@@ -74,11 +74,14 @@ team_a, team_b = [], []
 
 if team_mode == "Auto-Balanced Teams":
     team_a, team_b = auto_balance_teams(selected_players)
+    st.subheader("Auto-Balanced Teams")
+    st.write("**Team A:**", ", ".join(team_a))
+    st.write("**Team B:**", ", ".join(team_b))
 else:
     # Manual teams
     team_a = st.multiselect("Select Team A players", options=selected_players)
     team_b = [p for p in selected_players if p not in team_a]
-    st.write("Team B players:", ", ".join(team_b) if team_b else "(empty)")
+    st.write("**Team B players:**", ", ".join(team_b) if team_b else "(empty)")
 
 winner = st.radio("Select winning team", options=["Team A", "Team B"])
 
