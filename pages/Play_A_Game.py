@@ -113,18 +113,3 @@ with tab_team:
 
                 except Exception as e:
                     st.error(f"Failed to record game: {e}")
-
-# ---- Admin-only leaderboard wipe ----
-st.header("⚠️ Admin: Wipe Game Leaderboard & History")
-if is_admin:
-    wipe_game = st.selectbox("Select game to wipe", options=[""] + game_names)
-    if wipe_game:
-        if st.button(f"Wipe {wipe_game}"):
-            try:
-                save_leaderboard_to_git(wipe_game, {}, commit_message=f"Wipe {wipe_game} leaderboard")
-                save_history_to_git(wipe_game, {"matches": []}, commit_message=f"Wipe {wipe_game} history")
-                st.success(f"✅ {wipe_game} leaderboard and history wiped!")
-            except Exception as e:
-                st.error(f"Failed to wipe {wipe_game}: {e}")
-else:
-    st.info("Enter admin name to access wipe feature.")
