@@ -1,30 +1,37 @@
 import streamlit as st
-from GitLab_Persistence import load_leaderboard_from_git, env
-import trueskill
+from GitLab_Persistence import (
+    gitlab_list_leaderboards_dir,
+    load_leaderboard_from_git
+)
 
 st.set_page_config(page_title="Leaderboard", page_icon="🏆")
 st.title("🏆 Game Leaderboards")
 
 # --- Select Game ---
-files = [fn.replace("_leaderboard.json", "").replace("_history.json", "") 
-         for fn in st.session_state.get("leaderboard_files", [])] \
-         if "leaderboard_files" in st.session_state else []
-game_names = sorted(list({fn for fn in files}))
-if not game_names:
-    st.info("No games found. Record a game first.")
+files = gitlab_list_leaderboards_dir()
+game_names = sorted(list({fn.replace("_leaderboard.json","").replace("_history.json","") for fn in files if fn.endswith(".json")}))
+game_name = st.selectbox("Select game", options=game_names)
+
+if not game_name:
+    st.info("No games found.")
     st.stop()
 
-game_option = st.selectbox("Select a game", options=game_names)
-leaderboard = load_leaderboard_from_git(game_option)
+leaderboard = load_leaderboard_from_git(game_name)
 
 if not leaderboard:
-    st.info("No leaderboard data for this game yet.")
+    st.info(f"No leaderboard data for {game_name}.")
     st.stop()
 
 # --- Display leaderboard ---
-st.subheader(f"{game_option} Leaderboard")
-# Conservative rating = mu - 3*sigma
-sorted_players = sorted(leaderboard.items(), key=lambda item: item[1]["mu"] - 3*item[1]["sigma"], reverse=True)
-for i, (name, rating) in enumerate(sorted_players, start=1):
-    conservative = rating["mu"] - 3*rating["sigma"]
-    st.write(f"{i}. {name:10} | μ={rating['mu']:.2f}, σ={rating['sigma']:.2f}, rating={conservative:.2f}")
+st.subheader(f"Leaderboard for {game_name}")
+
+# Compute conservative rating
+for player, data in leaderboard.items():
+    data["rating"] = data["mu"] - 3*data["sigma"]
+
+sorted_players = sorted(leaderboard.items(), key=lambda x: x[1]["rating"], reverse=True)
+
+st.table([
+    {"Rank": i+1, "Player": name, "μ": f"{data['mu']:.2f}", "σ": f"{data['sigma']:.2f}", "Rating": f"{data['rating']:.2f}"}
+    for i, (name, data) in enumerate(sorted_players)
+])
