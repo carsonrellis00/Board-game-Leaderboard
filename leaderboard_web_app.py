@@ -1,7 +1,6 @@
 # leaderboard_web_app.py
 import streamlit as st
-import os
-import json
+import os, json
 
 # --- Page config ---
 st.set_page_config(
@@ -10,7 +9,18 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Page Title ---
+# --- Sidebar Hub ---
+st.sidebar.title("Home")  # This makes a "Home" label in the sidebar
+st.sidebar.markdown("Welcome! Use the sidebar to navigate to other pages:")
+
+st.sidebar.markdown("""
+- 👥 Manage Players
+- ✏️ Record Game / Matchmaking
+- 🏆 Leaderboard
+- 📜 Match History
+""")
+
+# --- Main page title ---
 st.title("🎲 Board Game Leaderboard Home")
 
 # --- Load Next Event ---
@@ -26,13 +36,10 @@ if os.path.exists(EVENT_FILE):
     except Exception:
         pass
 
-# Banner for next game night
 if next_event:
     st.markdown(f"### 📅 Next Board Game Night: {next_event}")
 
 st.markdown("---")
-
-# --- Home Page Content ---
 st.header("Welcome to the Board Game Leaderboard Hub!")
 st.write("Use the sidebar to navigate between the pages, or read below for details about each page.")
 
