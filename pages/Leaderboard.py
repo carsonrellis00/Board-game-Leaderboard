@@ -2,83 +2,85 @@
 import streamlit as st
 import pandas as pd
 from GitLab_Persistence import (
-    gitlab_list_leaderboards_dir,
     load_leaderboard_from_git,
     save_leaderboard_to_git,
-    load_history_from_git
+    load_history_from_git,
+    save_history_to_git,
+    gitlab_list_leaderboards_dir
 )
+from datetime import datetime
 
 st.set_page_config(page_title="Leaderboard", page_icon="🏆")
 st.title("🏆 Leaderboard")
 
-# ---------- Select Game ----------
-files = gitlab_list_leaderboards_dir()
-game_names = sorted(list({fn.replace("_leaderboard.json","").replace("_history.json","") 
-                          for fn in files if fn.endswith(".json")}))
-game_name = st.selectbox("Select game", options=game_names)
+# ---- Admin User ----
+ADMIN_USERNAME = "Carson"  # replace with your username
+current_user = st.text_input("Enter username for admin actions:", "")
 
-if not game_name:
-    st.info("No games found. Add a game first.")
+# ---- Game Selection ----
+all_files = gitlab_list_leaderboards_dir()
+game_names = sorted(list({fn.replace("_leaderboard.json", "").replace("_history.json", "")
+                          for fn in all_files if fn.endswith(".json")}))
+if not game_names:
+    st.info("No games found yet.")
     st.stop()
 
-# ---------- Load Data ----------
-leaderboard = load_leaderboard_from_git(game_name)  # dict: name -> {mu, sigma}
-history = load_history_from_git(game_name)          # dict: matches
+selected_game = st.selectbox("Select Game", options=game_names)
 
-# ---------- Compute Wins ----------
-wins_counter = {}
-for match in history.get("matches", []):
-    if match.get("type") == "team":
-        winner_team = match.get("winner")
-        if winner_team == "Team A":
-            winners = match.get("team_a", [])
-        elif winner_team == "Team B":
-            winners = match.get("team_b", [])
-        else:
-            winners = []
-        for player in winners:
-            wins_counter[player] = wins_counter.get(player, 0) + 1
-    elif match.get("type") == "individual":
-        results = match.get("results", [])
-        if results:
-            winner = results[0]
-            wins_counter[winner] = wins_counter.get(winner, 0) + 1
+# ---- Load Leaderboard and History ----
+leaderboard = load_leaderboard_from_git(selected_game)
+history = load_history_from_git(selected_game)
 
-# ---------- Prepare DataFrame ----------
-data = []
-for player, stats in leaderboard.items():
-    mu = stats.get("mu", 25)
-    sigma = stats.get("sigma", 8.33)
-    wins = wins_counter.get(player, 0)
-    data.append({"Player": player, "Mu": mu, "Sigma": sigma, "Wins": wins})
+# ---- Prepare Leaderboard DataFrame ----
+if leaderboard:
+    df = pd.DataFrame([
+        {
+            "Player": name,
+            "Mu": data.get("mu", 25.0),
+            "Sigma": data.get("sigma", 8.333),
+            "Wins": data.get("wins", 0)
+        }
+        for name, data in leaderboard.items()
+    ])
+    df = df.sort_values(by="Mu", ascending=False).reset_index(drop=True)
+    df.insert(0, "Rank", range(1, len(df) + 1))
+else:
+    df = pd.DataFrame(columns=["Rank", "Player", "Mu", "Sigma", "Wins"])
 
-# Sort by mu descending
-df = pd.DataFrame(data)
-df = df.sort_values(by="Mu", ascending=False).reset_index(drop=True)
-df.index += 1  # Rank starting at 1
-df.index.name = "Rank"
-
-# Display leaderboard
+# ---- Display Leaderboard ----
+st.subheader(f"Leaderboard: {selected_game}")
 st.dataframe(df, use_container_width=True)
 
-# --- Admin-only leaderboard wipe ---
+# Highlight top 3
+def highlight_top(row):
+    if row.name == 0:
+        return ["background-color: gold"] * len(row)
+    elif row.name == 1:
+        return ["background-color: silver"] * len(row)
+    elif row.name == 2:
+        return ["background-color: #cd7f32"] * len(row)
+    else:
+        return [""] * len(row)
+
+if not df.empty:
+    st.dataframe(df.style.apply(highlight_top, axis=1), use_container_width=True)
+
 st.markdown("---")
-st.header("⚠️ Admin: Wipe Game Leaderboard & History")
 
-admin_pass = st.text_input("Enter admin name to unlock wipe", type="password")
-
-if admin_pass == "Carson":  # replace with your name or check via secret
-    wipe_game = st.selectbox("Select game to wipe", options=game_names)
-    if st.button("Wipe Leaderboard & History"):
-        try:
-            # Reset leaderboard
-            save_leaderboard_to_git(wipe_game, {}, commit_message=f"Admin wipe: {wipe_game} leaderboard")
-            # Reset history
-            save_history_to_git(wipe_game, {"matches":[]}, commit_message=f"Admin wipe: {wipe_game} history")
-            st.success(f"Leaderboard and history for '{wipe_game}' wiped successfully.")
-        except Exception as e:
-            st.error(f"Failed to wipe: {e}")
-else:
-    st.info("Enter admin name to access leaderboard wipe functionality.")
-
-
+# ---- Admin: Wipe Leaderboard ----
+if current_user == ADMIN_USERNAME:
+    st.subheader("⚠️ Admin: Wipe Leaderboard")
+    st.warning("This will reset all Mu, Sigma, and Wins for this game.")
+    if st.button(f"Wipe {selected_game} Leaderboard"):
+        # Reset leaderboard
+        for player in leaderboard.keys():
+            leaderboard[player]["mu"] = 25.0
+            leaderboard[player]["sigma"] = 8.333
+            leaderboard[player]["wins"] = 0
+        save_leaderboard_to_git(selected_game, leaderboard, commit_message=f"Reset {selected_game} leaderboard by admin")
+        
+        # Reset history
+        history["matches"] = []
+        save_history_to_git(selected_game, history, commit_message=f"Clear {selected_game} match history by admin")
+        
+        st.success(f"{selected_game} leaderboard and history wiped.")
