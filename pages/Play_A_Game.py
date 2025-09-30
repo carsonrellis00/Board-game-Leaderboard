@@ -18,11 +18,6 @@ st.title("✏️ Record Game & Matchmaking")
 # ---- TrueSkill environment ----
 env = trueskill.TrueSkill(draw_probability=0)
 
-# ---- Admin username ----
-ADMIN_USERNAME = "Carson"  # Change to your admin name
-current_user = st.text_input("Enter admin name for admin-only features:", type="default")
-is_admin = current_user.strip() == ADMIN_USERNAME
-
 # ---- Load players and games ----
 players = load_players_from_git() or []
 files = gitlab_list_leaderboards_dir()
