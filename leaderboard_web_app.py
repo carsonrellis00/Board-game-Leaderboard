@@ -6,15 +6,6 @@ st.set_page_config(page_title="Home", page_icon="🎲", layout="wide")
 st.sidebar.title("🎲 Board Game Leaderboard")
 st.sidebar.markdown("Navigate to different pages:")
 
-# Custom buttons to jump to pages
-if st.sidebar.button("👥 Manage Players"):
-    st.experimental_set_query_params(page="Player_Manager")
-if st.sidebar.button("✏️ Record Game / Matchmaking"):
-    st.experimental_set_query_params(page="Record_Game")
-if st.sidebar.button("🏆 Leaderboard"):
-    st.experimental_set_query_params(page="Leaderboard")
-if st.sidebar.button("📜 Match History"):
-    st.experimental_set_query_params(page="Match_History")
 
 # ---- Main Page ----
 st.title("🎲 Board Game Leaderboard Hub")
@@ -39,3 +30,4 @@ else:
 
 if next_event:
     st.markdown(f"### 📅 Next Board Game Night: {next_event}")
+
