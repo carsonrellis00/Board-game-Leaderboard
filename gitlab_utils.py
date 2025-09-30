@@ -1,6 +1,6 @@
 import requests
 import streamlit as st
-import json
+import base64
 
 # ---- Load secrets ----
 GITLAB_TOKEN = st.secrets["GITLAB_TOKEN"]
@@ -37,7 +37,7 @@ def update_file_in_gitlab(file_path: str, content: str, commit_message: str):
 
 def get_file_from_gitlab(file_path: str):
     """
-    Get a file's content from GitLab as string.
+    Get a file's content from GitLab as a string.
     Returns None if file doesn't exist or fails.
     """
     url = f"{API_BASE}/projects/{requests.utils.quote(GITLAB_REPO, safe='')}/repository/files/{requests.utils.quote(file_path, safe='')}?ref={GITLAB_BRANCH}"
@@ -45,8 +45,10 @@ def get_file_from_gitlab(file_path: str):
     r = requests.get(url, headers=headers)
     if r.status_code == 200:
         file_info = r.json()
-        content = file_info["content"]
-        return requests.utils.unquote(content.encode().decode('base64')) if content else ""
+        encoded_content = file_info.get("content", "")
+        # Decode Base64
+        decoded_bytes = base64.b64decode(encoded_content)
+        return decoded_bytes.decode("utf-8")
     elif r.status_code == 404:
         return None
     else:
