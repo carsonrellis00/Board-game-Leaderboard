@@ -11,7 +11,7 @@ from GitLab_Persistence import (
 import trueskill
 from datetime import datetime
 
-st.set_page_config(page_title="Game Manager", page_icon="🎲")
+st.set_page_config(page_title="Player Manager", page_icon="🎲")
 st.title("🎲 Game Manager")
 
 # --- TrueSkill environment ---
@@ -175,3 +175,4 @@ with tab_matches:
 
 st.markdown("---")
 st.info("This page writes directly to your GitLab repository. Make sure your GITLAB_TOKEN and PROJECT_ID are set in Streamlit secrets or environment variables.")
+
