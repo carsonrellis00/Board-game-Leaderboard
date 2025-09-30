@@ -26,10 +26,10 @@ def auto_balance_teams(players, leaderboard, env):
     if len(players) < 2:
         return players, []
 
-    # Helper to get mu, default to env.mu if player not in leaderboard
+    # Helper to get mu safely
     def get_mu(player):
         rating = leaderboard.get(player)
-        if rating:
+        if isinstance(rating, dict):
             return rating.get("mu", env.mu)
         return env.mu
 
