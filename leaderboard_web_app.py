@@ -1,56 +1,41 @@
-# leaderboard_web_app.py
 import streamlit as st
-import os, json
 
-# --- Page config ---
-st.set_page_config(
-    page_title="Home",
-    page_icon="🎲",
-    layout="wide"
-)
+st.set_page_config(page_title="Home", page_icon="🎲", layout="wide")
 
-# --- Sidebar Hub ---
-st.sidebar.title("Home")  # This makes a "Home" label in the sidebar
-st.sidebar.markdown("Welcome! Use the sidebar to navigate to other pages:")
+# ---- Sidebar ----
+st.sidebar.title("🎲 Board Game Leaderboard")
+st.sidebar.markdown("Navigate to different pages:")
 
-st.sidebar.markdown("""
+# Custom buttons to jump to pages
+if st.sidebar.button("👥 Manage Players"):
+    st.experimental_set_query_params(page="Player_Manager")
+if st.sidebar.button("✏️ Record Game / Matchmaking"):
+    st.experimental_set_query_params(page="Record_Game")
+if st.sidebar.button("🏆 Leaderboard"):
+    st.experimental_set_query_params(page="Leaderboard")
+if st.sidebar.button("📜 Match History"):
+    st.experimental_set_query_params(page="Match_History")
+
+# ---- Main Page ----
+st.title("🎲 Board Game Leaderboard Hub")
+st.write("Welcome! Use the sidebar to navigate:")
+st.markdown("""
 - 👥 Manage Players
 - ✏️ Record Game / Matchmaking
 - 🏆 Leaderboard
 - 📜 Match History
 """)
 
-# --- Main page title ---
-st.title("🎲 Board Game Leaderboard Home")
-
-# --- Load Next Event ---
+# Optional: show next event if available
+import os, json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EVENT_FILE = os.path.join(BASE_DIR, "event.json")
-
-next_event = "Set your next event in event.json"
 if os.path.exists(EVENT_FILE):
-    try:
-        with open(EVENT_FILE, "r") as f:
-            data = json.load(f)
-            next_event = data.get("next_event", next_event)
-    except Exception:
-        pass
+    with open(EVENT_FILE, "r") as f:
+        data = json.load(f)
+        next_event = data.get("next_event", "")
+else:
+    next_event = "Set your next event in event.json"
 
 if next_event:
     st.markdown(f"### 📅 Next Board Game Night: {next_event}")
-
-st.markdown("---")
-st.header("Welcome to the Board Game Leaderboard Hub!")
-st.write("Use the sidebar to navigate between the pages, or read below for details about each page.")
-
-st.markdown("""
-### 📌 App Pages & Features
-
-- **👥 Manage Players**: Add or remove players globally. All pages reference this list.
-- **✏️ Record Game / Matchmaking**: Record individual or team-based games for any selected game, including balanced team generation.
-- **🏆 Leaderboard**: View rankings for each game based on TrueSkill ratings.
-- **📜 Match History**: Review past matches with timestamps and results.
-""")
-
-st.markdown("---")
-st.info("Use the sidebar to navigate between pages.")
