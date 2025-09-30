@@ -13,10 +13,6 @@ from datetime import datetime
 st.set_page_config(page_title="Leaderboard", page_icon="🏆")
 st.title("🏆 Leaderboard")
 
-# ---- Admin User ----
-ADMIN_USERNAME = "Carson"  # replace with your username
-current_user = st.text_input("Enter username for admin actions:", "")
-
 # ---- Game Selection ----
 all_files = gitlab_list_leaderboards_dir()
 game_names = sorted(list({fn.replace("_leaderboard.json", "").replace("_history.json", "")
@@ -69,7 +65,9 @@ if not df.empty:
     st.dataframe(df.style.apply(highlight_top, axis=1), use_container_width=True)
 
 st.markdown("---")
-
+# ---- Admin User ----
+ADMIN_USERNAME = "Carson"  # replace with your username
+current_user = st.text_input("Enter username for admin actions:", "")
 # ---- Admin: Wipe Leaderboard ----
 if current_user == ADMIN_USERNAME:
     st.subheader("⚠️ Admin: Wipe Leaderboard")
@@ -87,5 +85,6 @@ if current_user == ADMIN_USERNAME:
         save_history_to_git(selected_game, history, commit_message=f"Clear {selected_game} match history by admin")
         
         st.success(f"{selected_game} leaderboard and history wiped.")
+
 
 
