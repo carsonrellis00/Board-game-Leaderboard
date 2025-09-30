@@ -72,7 +72,4 @@ with tab_players:
         st.info("No players yet.")
 
 
-st.markdown("---")
-st.info("This page writes directly to your GitLab repository. Make sure your GITLAB_TOKEN and PROJECT_ID are set in Streamlit secrets or environment variables.")
-
 
