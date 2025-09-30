@@ -1,100 +1,113 @@
-import itertools
 import streamlit as st
-import json
-import os
-import trueskill
-from datetime import datetime
+from GitLab_Persistence import (
+    load_players_from_git,
+    load_leaderboard_from_git,
+    save_leaderboard_to_git,
+    load_history_from_git,
+    save_history_to_git,
+    env
+)
+from itertools import combinations
+import math
 
-# ---- Paths ----
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LEADERBOARD_DIR = os.path.join(BASE_DIR, "leaderboards")
-PLAYERS_FILE = os.path.join(LEADERBOARD_DIR, "players.json")
-os.makedirs(LEADERBOARD_DIR, exist_ok=True)
+st.set_page_config(page_title="Matchmaking", page_icon="⚔️")
+st.title("⚔️ Matchmaking & Team Game Recording")
 
-env = trueskill.TrueSkill(draw_probability=0)
+# --- Select game ---
+files = [fn for fn in st.session_state.get("leaderboard_files", [])] \
+        if "leaderboard_files" in st.session_state else []
+all_files = [fn.replace("_leaderboard.json","").replace("_history.json","") 
+             for fn in load_players_from_git()]  # fallback if session_state empty
+game_names = sorted(list({fn for fn in all_files}))
+game_name = st.selectbox("Select game for matchmaking", options=game_names)
 
-# ---- Helper Functions ----
-def load_players():
-    if os.path.exists(PLAYERS_FILE):
-        with open(PLAYERS_FILE, "r") as f:
-            return list(json.load(f).keys())
-    return []
+if not game_name:
+    st.warning("Add players and a game first.")
+    st.stop()
 
-def load_leaderboard(game):
-    path = os.path.join(LEADERBOARD_DIR, f"{game}_leaderboard.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            data = json.load(f)
-        return {name: env.Rating(mu, sigma) for name, (mu, sigma) in data.items()}
-    return {}
+# Load leaderboard and history
+leaderboard = load_leaderboard_from_git(game_name)
+history = load_history_from_git(game_name)
 
-def save_leaderboard(game, leaderboard):
-    path = os.path.join(LEADERBOARD_DIR, f"{game}_leaderboard.json")
-    data = {name: (r.mu, r.sigma) for name, r in leaderboard.items()}
-    with open(path, "w") as f:
-        json.dump(data, f, indent=4)
+# --- Select players ---
+all_players = load_players_from_git()
+selected_players = st.multiselect("Select players for this match", options=all_players)
 
-# ---- Balanced Teams Function ----
-def make_teams(players, leaderboard):
-    ratings = {p: leaderboard.get(p, env.Rating()).mu - 3*leaderboard.get(p, env.Rating()).sigma for p in players}
-    best_split = None
-    best_diff = float("inf")
+if len(selected_players) < 2:
+    st.info("Select at least two players for matchmaking.")
+    st.stop()
 
-    for team_a in itertools.combinations(players, len(players)//2):
-        team_b = [p for p in players if p not in team_a]
-        score_a = sum(ratings[p] for p in team_a)
-        score_b = sum(ratings[p] for p in team_b)
-        diff = abs(score_a - score_b)
+# --- Team balancing ---
+def team_combinations(players):
+    n = len(players)
+    half = n // 2
+    return list(combinations(players, half))
+
+def team_average_rating(team):
+    ratings = []
+    for name in team:
+        r = leaderboard.get(name)
+        ratings.append(r['mu'] if r else env.Rating().mu)
+    return sum(ratings)/len(ratings)
+
+# --- Generate balanced teams ---
+if st.button("Generate Teams"):
+    best_diff = math.inf
+    best_pair = None
+    combos = team_combinations(selected_players)
+    for i in range(len(combos)//2):
+        team_a = combos[i]
+        team_b = tuple(p for p in selected_players if p not in team_a)
+        diff = abs(team_average_rating(team_a) - team_average_rating(team_b))
         if diff < best_diff:
             best_diff = diff
-            best_split = (list(team_a), list(team_b), score_a, score_b)
-    return best_split
+            best_pair = (team_a, team_b)
+    if best_pair:
+        team_a, team_b = best_pair
+        st.session_state['team_a'] = team_a
+        st.session_state['team_b'] = team_b
+        st.success("Balanced teams generated!")
 
-# ---- Streamlit UI ----
-st.title("⚔️ Matchmaking")
+# --- Display teams ---
+if 'team_a' in st.session_state and 'team_b' in st.session_state:
+    team_a = st.session_state['team_a']
+    team_b = st.session_state['team_b']
+    st.subheader("Team A")
+    st.write(", ".join(team_a))
+    st.subheader("Team B")
+    st.write(", ".join(team_b))
 
-# Select game for leaderboard updates
-games = [f.replace("_leaderboard.json","") for f in os.listdir(LEADERBOARD_DIR) if f.endswith("_leaderboard.json")]
-game = st.selectbox("Select game to update ratings", options=games)
+    winner = st.radio("Select winning team", options=["Team A", "Team B"])
 
-leaderboard = load_leaderboard(game)
-all_players = load_players()
+    if st.button("Record Team Match"):
+        if not team_a or not team_b:
+            st.warning("Both teams must have at least one player.")
+        else:
+            # Prepare ratings
+            ratings_a = [env.Rating(**leaderboard.get(n, {})) for n in team_a]
+            ratings_b = [env.Rating(**leaderboard.get(n, {})) for n in team_b]
+            ranks = [0,1] if winner=="Team A" else [1,0]
+            new_team_ratings = env.rate([ratings_a, ratings_b], ranks=ranks)
 
-if not all_players:
-    st.warning("No players found. Add players in Manage Players first.")
-else:
-    # Sort by conservative rating
-    sorted_players = sorted(all_players, key=lambda p: leaderboard.get(p, env.Rating()).mu - 3*leaderboard.get(p, env.Rating()).sigma, reverse=True)
+            # Update leaderboard
+            for name, r in zip(team_a, new_team_ratings[0]):
+                leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
+            for name, r in zip(team_b, new_team_ratings[1]):
+                leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
 
-    selected_players = st.multiselect("Select players for this match", sorted_players)
+            # Append to history
+            history.setdefault("matches", []).append({
+                "timestamp": st.session_state.get("timestamp", datetime.utcnow().isoformat()),
+                "type": "team",
+                "team_a": list(team_a),
+                "team_b": list(team_b),
+                "winner": winner
+            })
 
-    if len(selected_players) % 2 == 0 and len(selected_players) > 1:
-        if st.button("Generate Balanced Teams"):
-            team_a, team_b, score_a, score_b = make_teams(selected_players, leaderboard)
-            st.subheader("Suggested Teams")
-            st.write(f"**Team A** ({score_a:.2f}): {', '.join(team_a)}")
-            st.write(f"**Team B** ({score_b:.2f}): {', '.join(team_b)}")
-            st.session_state["match_teams"] = (team_a, team_b)
-
-    # Record match result
-    if "match_teams" in st.session_state:
-        team_a, team_b = st.session_state["match_teams"]
-        st.subheader("Record Match Result")
-        winner = st.radio("Which team won?", ["Team A", "Team B"])
-        if st.button("Record Result"):
-            ratings_a = [leaderboard.get(p, env.Rating()) for p in team_a]
-            ratings_b = [leaderboard.get(p, env.Rating()) for p in team_b]
-
-            if winner == "Team A":
-                new_ratings = env.rate([ratings_a, ratings_b], ranks=[0, 1])
-            else:
-                new_ratings = env.rate([ratings_a, ratings_b], ranks=[1, 0])
-
-            for p, r in zip(team_a, new_ratings[0]):
-                leaderboard[p] = r
-            for p, r in zip(team_b, new_ratings[1]):
-                leaderboard[p] = r
-
-            save_leaderboard(game, leaderboard)
-            st.success(f"Team game recorded! {winner} wins.")
-            del st.session_state["match_teams"]
+            # Save to GitLab
+            try:
+                save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record team match {game_name}")
+                save_history_to_git(game_name, history, commit_message=f"Add team match {game_name} history")
+                st.success("Match recorded and pushed to GitLab.")
+            except Exception as e:
+                st.error(f"Failed to save match: {e}")
