@@ -1,5 +1,7 @@
 # pages/Play_A_Game.py
 import streamlit as st
+import trueskill
+from datetime import datetime
 from GitLab_Persistence import (
     load_players_from_git,
     save_players_to_git,
@@ -9,26 +11,23 @@ from GitLab_Persistence import (
     save_history_to_git,
     gitlab_list_leaderboards_dir
 )
-import trueskill
-from datetime import datetime
 
 st.set_page_config(page_title="Play a Game", page_icon="⚔️")
-st.title("⚔️ Play a Game / Record Match")
+st.title("⚔️ Game Recording & Matchmaking")
 
-# TrueSkill environment
+# ----- TrueSkill environment -----
 env = trueskill.TrueSkill(draw_probability=0)
 
-# Load all players
-players = load_players_from_git()
+# ----- Load players and games -----
+players = load_players_from_git() or []
 if not players:
-    st.warning("No players found. Add players first in Manage Players.")
+    st.warning("No players found. Add players first in Player Manager.")
     st.stop()
 
-# Load games from GitLab
 files = gitlab_list_leaderboards_dir()
 game_names = sorted(list({fn.replace("_leaderboard.json","").replace("_history.json","") 
                           for fn in files if fn.endswith(".json")}))
-game_option = st.selectbox("Select game (or type a new game name)", options=["<New Game>"] + game_names)
+game_option = st.selectbox("Select game (or type a new name)", options=["<New Game>"] + game_names)
 
 if game_option == "<New Game>":
     game_name_input = st.text_input("New game name")
@@ -40,88 +39,79 @@ if not game_name:
     st.info("Pick or type a game name to record matches for.")
     st.stop()
 
-st.subheader(f"Recording for game: {game_name}")
-
-# Load leaderboard and history
 leaderboard = load_leaderboard_from_git(game_name)
 history = load_history_from_git(game_name)
 
-# Select players participating
-selected_players = st.multiselect("Select players for this match", options=players)
-if not selected_players or len(selected_players) < 2:
+# ----- Helper: Auto-balance teams -----
+def auto_balance_teams(selected_players, leaderboard, env):
+    def get_mu(p):
+        rating = leaderboard.get(p)
+        if rating is None:
+            return env.create_rating().mu  # default rating
+        return rating["mu"]
+    
+    sorted_players = sorted(selected_players, key=get_mu, reverse=True)
+    team_a = sorted_players[::2]
+    team_b = sorted_players[1::2]
+    return team_a, team_b
+
+# ----- Game recording UI -----
+st.header(f"Record a Game: {game_name}")
+
+# Player selection
+selected_players = st.multiselect("Select players participating", options=players)
+
+if not selected_players:
     st.info("Select at least 2 players.")
     st.stop()
 
-# Choose team mode
-team_mode = st.radio("Team mode", options=["Auto-Balanced Teams", "Manual Teams"])
+# Team assignment
+mode = st.radio("Team assignment", options=["Manual Teams", "Auto-balanced Teams"])
 
-def auto_balance_teams(selected_players):
-    # sort players by mu descending
-    sorted_players = sorted(selected_players, key=lambda p: leaderboard.get(p, {"mu": env.mu})["mu"], reverse=True)
-    team_a, team_b = [], []
-    sum_a, sum_b = 0, 0
-    for p in sorted_players:
-        rating = leaderboard.get(p, {"mu": env.mu})["mu"]
-        if sum_a <= sum_b:
-            team_a.append(p)
-            sum_a += rating
-        else:
-            team_b.append(p)
-            sum_b += rating
-    return team_a, team_b
-
-team_a, team_b = [], []
-
-if team_mode == "Auto-Balanced Teams":
-    team_a, team_b = auto_balance_teams(selected_players)
-    st.subheader("Auto-Balanced Teams")
-    st.write("**Team A:**", ", ".join(team_a))
-    st.write("**Team B:**", ", ".join(team_b))
-else:
-    # Manual teams
-    team_a = st.multiselect("Select Team A players", options=selected_players)
+if mode == "Manual Teams":
+    team_a = st.multiselect("Team A players", options=selected_players)
     team_b = [p for p in selected_players if p not in team_a]
-    st.write("**Team B players:**", ", ".join(team_b) if team_b else "(empty)")
+    st.write("Team B:", ", ".join(team_b) if team_b else "(empty)")
+else:
+    team_a, team_b = auto_balance_teams(selected_players, leaderboard, env)
+    st.write("Team A:", ", ".join(team_a))
+    st.write("Team B:", ", ".join(team_b))
 
-winner = st.radio("Select winning team", options=["Team A", "Team B"])
+winner = st.radio("Select winner", options=["Team A", "Team B"])
 
-if st.button("Record Game"):
+if st.button("Record Match"):
     if not team_a or not team_b:
         st.warning("Both teams must have at least one player.")
     else:
         try:
-            # Prepare TrueSkill ratings
-            ratings_a = [env.Rating(**leaderboard.get(p, {"mu": env.mu, "sigma": env.sigma})) 
-                         if p in leaderboard else env.Rating() for p in team_a]
-            ratings_b = [env.Rating(**leaderboard.get(p, {"mu": env.mu, "sigma": env.sigma})) 
-                         if p in leaderboard else env.Rating() for p in team_b]
+            # Prepare ratings
+            ratings_a = [env.Rating(mu=leaderboard[p]["mu"], sigma=leaderboard[p]["sigma"])
+                         if p in leaderboard else env.create_rating() for p in team_a]
+            ratings_b = [env.Rating(mu=leaderboard[p]["mu"], sigma=leaderboard[p]["sigma"])
+                         if p in leaderboard else env.create_rating() for p in team_b]
 
-            # Determine ranks
-            if winner == "Team A":
-                new_ratings = env.rate([ratings_a, ratings_b], ranks=[0,1])
-            else:
-                new_ratings = env.rate([ratings_a, ratings_b], ranks=[1,0])
+            # Compute new ratings
+            ranks = [0, 1] if winner == "Team A" else [1, 0]
+            new_ratings_a, new_ratings_b = env.rate([ratings_a, ratings_b], ranks=ranks)
 
             # Update leaderboard
-            for name, r in zip(team_a, new_ratings[0]):
+            for name, r in zip(team_a, new_ratings_a):
                 leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
-            for name, r in zip(team_b, new_ratings[1]):
+            for name, r in zip(team_b, new_ratings_b):
                 leaderboard[name] = {"mu": r.mu, "sigma": r.sigma}
 
             # Update history
             history.setdefault("matches", []).append({
                 "timestamp": datetime.utcnow().isoformat(),
-                "type": "team",
                 "team_a": team_a,
                 "team_b": team_b,
                 "winner": winner
             })
 
-            # Save to GitLab
-            save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record team match for {game_name}")
-            save_history_to_git(game_name, history, commit_message=f"Add team match to {game_name} history")
+            # Push to GitLab
+            save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record match for {game_name}")
+            save_history_to_git(game_name, history, commit_message=f"Add match to {game_name} history")
 
-            st.success("Game recorded and ratings updated successfully!")
-
+            st.success(f"Game recorded! {winner} won.")
         except Exception as e:
             st.error(f"Failed to record game: {e}")
