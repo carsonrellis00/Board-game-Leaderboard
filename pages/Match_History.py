@@ -1,40 +1,33 @@
 import streamlit as st
 import json
-import os
+from gitlab_utils import get_file_from_gitlab
 
-# ---- Paths ----
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LEADERBOARD_DIR = os.path.join(BASE_DIR, "leaderboards")
-
-# ---- Helper Functions ----
-def get_games():
-    files = os.listdir(LEADERBOARD_DIR)
-    games = sorted(set(f.replace("_history.json","") for f in files if f.endswith("_history.json")))
-    return games
-
-def load_history(game):
-    path = os.path.join(LEADERBOARD_DIR, f"{game}_history.json")
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            return json.load(f)
-    return []
-
-# ---- Streamlit UI ----
+st.set_page_config(page_title="📜 Match History", page_icon="📜")
 st.title("📜 Match History")
 
-games = get_games()
-if not games:
-    st.info("No games found yet.")
-else:
-    game = st.selectbox("Select game", options=games)
-    history = load_history(game)
+# ---- Select game ----
+game_name = st.text_input("Enter game name")
+if not game_name:
+    st.info("Enter a game name to view its history.")
+    st.stop()
 
-    if history:
-        st.write(f"### {game} Match History")
-        for match in reversed(history):  # newest first
-            if match.get("type") == "Individual":
-                st.write(f"{match['timestamp']}: {', '.join(match['players'])}")
-            elif match.get("type") == "Team-based":
-                st.write(f"{match['timestamp']}: Team A ({', '.join(match['team_a'])}) vs Team B ({', '.join(match['team_b'])}) | Winner: {match['winner']}")
-    else:
-        st.info(f"No matches recorded yet for {game}.")
+history_file = f"leaderboards/{game_name.lower().replace(' ', '_')}_history.json"
+
+# ---- Load history from GitLab ----
+history_data = get_file_from_gitlab(history_file)
+
+if not history_data:
+    st.warning(f"No history found for **{game_name}**.")
+    st.stop()
+
+try:
+    history = json.loads(history_data)
+except json.JSONDecodeError:
+    st.error("❌ Failed to parse match history.")
+    st.stop()
+
+# ---- Display ----
+for match in history:
+    st.markdown(f"**{match['timestamp']}** — {', '.join(match['players'])}")
+    st.write(f"Ranks: {match['ranks']}")
+    st.markdown("---")
