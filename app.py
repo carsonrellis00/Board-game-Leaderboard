@@ -12,10 +12,13 @@ EVENT_FILE = os.path.join(BASE_DIR, "event.json")
 
 # ---- Load Next Event ----
 next_event = "Set your next event in event.json"
-if os.path.exists(EVENT_FILE):
-    with open(EVENT_FILE, "r") as f:
-        data = json.load(f)
-        next_event = data.get("next_event", next_event)
+try:
+    if os.path.exists(EVENT_FILE):
+        with open(EVENT_FILE, "r") as f:
+            data = json.load(f)
+            next_event = data.get("next_event", next_event)
+except Exception as e:
+    st.warning(f"Could not load event.json: {e}")
 
 # Banner
 st.markdown(f"### 📅 Next Board Game Night: {next_event}")
