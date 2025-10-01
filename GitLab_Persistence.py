@@ -68,14 +68,18 @@ def gitlab_create_or_update_file(file_path, data, commit_message):
     return resp.json()
 
 # --- Players ---
+# Ensure you always return dicts
 def load_players_from_git():
-    status, data = gitlab_raw_get("leaderboards/players.json")
-    if status == 200:
+    try:
+        data = gitlab_read_file("leaderboards/players.json")
         if isinstance(data, list):
-            return {"players": data}
+            return {"players": data}  # wrap list into dict
         elif isinstance(data, dict):
             return data
-    return {"players": []}
+        else:
+            return {"players": []}
+    except Exception:
+        return {"players": []}
 
 def save_players_to_git(players_dict, commit_message="Update players list"):
     if isinstance(players_dict, list):
@@ -84,15 +88,13 @@ def save_players_to_git(players_dict, commit_message="Update players list"):
 
 # --- Leaderboard ---
 def load_leaderboard_from_git(game_name):
-    file_path = _leaderboard_path_for_game(game_name)
-    status, data = gitlab_raw_get(file_path)
-    if status == 200:
-        if isinstance(data, list):
-            # Convert list to default dict
-            return {p: {"mu": 25.0, "sigma": 8.333, "wins": 0} for p in data}
-        elif isinstance(data, dict):
-            return data
-    return {}
+    try:
+        data = gitlab_read_file(f"leaderboards/{game_name}_leaderboard.json")
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except Exception:
+        return {}
 
 def save_leaderboard_to_git(game_name, leaderboard_dict, commit_message=None):
     file_path = _leaderboard_path_for_game(game_name)
@@ -123,3 +125,4 @@ def save_history_to_git(game_name, history_dict, commit_message=None):
     if commit_message is None:
         commit_message = f"Update {game_name} history"
     gitlab_create_or_update_file(file_path, history_dict, commit_message)
+
