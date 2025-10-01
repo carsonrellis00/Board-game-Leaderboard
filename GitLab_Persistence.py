@@ -3,7 +3,7 @@ import streamlit as st
 import os, json, requests
 import trueskill
 from datetime import datetime
-from urllib.parse import quote_plus
+from urllib.parse import quote, unquote
 
 st.set_page_config(page_title="GitLab Persistence", page_icon="💾")
 
@@ -32,8 +32,9 @@ HEADERS = {"PRIVATE-TOKEN": GITLAB_TOKEN}
 
 # ---------- Helper functions ----------
 def gitlab_raw_get(file_path):
-    """Return (status_code, parsed_json_or_text)"""
-    url = f"{API_BASE}/repository/files/{quote_plus(file_path)}/raw?ref={BRANCH}"
+    """Return (status_code, parsed_json_or_text). file_path like 'leaderboards/players.json'."""
+    url_path = quote(file_path, safe='')   # <- use quote() so spaces -> %20 (not +)
+    url = f"{API_BASE}/repository/files/{url_path}/raw?ref={BRANCH}"
     resp = requests.get(url, headers=HEADERS, timeout=15)
     if resp.status_code == 200:
         try:
@@ -43,13 +44,15 @@ def gitlab_raw_get(file_path):
     return resp.status_code, resp.text
 
 def gitlab_file_exists(file_path):
-    url = f"{API_BASE}/repository/files/{quote_plus(file_path)}?ref={BRANCH}"
+    url_path = quote(file_path, safe='')
+    url = f"{API_BASE}/repository/files/{url_path}?ref={BRANCH}"
     resp = requests.get(url, headers=HEADERS, timeout=15)
     return resp.status_code == 200
 
 def gitlab_create_or_update_file(file_path, data, commit_message):
     content = json.dumps(data, indent=2, ensure_ascii=False)
-    api_path = f"{API_BASE}/repository/files/{quote_plus(file_path)}"
+    url_path = quote(file_path, safe='')
+    api_path = f"{API_BASE}/repository/files/{url_path}"
     payload = {
         "branch": BRANCH,
         "content": content,
@@ -70,6 +73,25 @@ def gitlab_list_leaderboards_dir():
     if resp.status_code == 200:
         return [item["name"] for item in resp.json()]
     return []
+def _normalize_game_basename(name: str) -> str:
+    """
+    Convert a supplied game identifier into a clean basename.
+    - removes known suffixes if present (_leaderboard.json, _history.json, .json)
+    - converts plus signs to spaces and URL-decodes any %XX
+    - strips any path components
+    """
+    if not name:
+        return name
+    # ensure no folder path, get basename
+    name = os.path.basename(name)
+    # decode URL encodings and plus signs
+    name = name.replace("+", " ")
+    name = unquote(name)
+    # strip known suffixes
+    for suffix in ("_leaderboard.json", "_history.json", ".json"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+    return name
 
 # ---------- TrueSkill environment ----------
 env = trueskill.TrueSkill(draw_probability=0)
@@ -114,3 +136,4 @@ def save_history_to_git(game_name, history_dict, commit_message=None):
         commit_message = f"Update {game_name} history"
     file_path = f"leaderboards/{game_name}_history.json"
     gitlab_create_or_update_file(file_path, history_dict, commit_message)
+
