@@ -158,16 +158,23 @@ elif match_type == "Free-for-All":
         st.warning("Select at least 2 players for a Free-for-All match.")
     else:
         st.subheader("Enter finishing order")
-        finishing_order = []
-        remaining = selected_players.copy()
-        while remaining:
-            pick = st.selectbox(f"Next finisher ({len(finishing_order)+1})", options=remaining)
-            if st.button(f"Add '{pick}' to order", key=f"add_{len(finishing_order)}"):
+        finishing_order = st.session_state.get("ffa_order", [])
+        remaining = [p for p in selected_players if p not in finishing_order]
+
+        for idx in range(len(finishing_order), len(selected_players)):
+            pick = st.selectbox(
+                f"Next finisher ({idx+1})",
+                options=remaining,
+                key=f"ffa_pick_{idx}"  # <-- unique key per widget
+            )
+            if st.button(f"Add '{pick}' to order", key=f"ffa_add_{idx}"):
                 finishing_order.append(pick)
                 remaining.remove(pick)
+                st.session_state["ffa_order"] = finishing_order
+                st.experimental_rerun()  # refresh so remaining updates
 
-        if finishing_order and len(finishing_order) == len(selected_players):
-            if st.button("Record Free-for-All Game"):
+        if len(finishing_order) == len(selected_players):
+            if st.button("Record Free-for-All Game", key="record_ffa"):
                 try:
                     rating_groups = [[env.Rating(**leaderboard.get(p, {"mu": env.mu, "sigma": env.sigma}))] 
                                      for p in finishing_order]
@@ -177,8 +184,11 @@ elif match_type == "Free-for-All":
                     # Update leaderboard
                     for name, r_list in zip(finishing_order, new_ratings):
                         r = r_list[0] if isinstance(r_list, list) else r_list
-                        leaderboard[name] = {"mu": r.mu, "sigma": r.sigma,
-                                             "wins": leaderboard.get(name, {}).get("wins", 0) + (1 if name == finishing_order[0] else 0)}
+                        leaderboard[name] = {
+                            "mu": r.mu,
+                            "sigma": r.sigma,
+                            "wins": leaderboard.get(name, {}).get("wins", 0) + (1 if name == finishing_order[0] else 0)
+                        }
 
                     # Update history
                     history.setdefault("matches", []).append({
@@ -195,5 +205,7 @@ elif match_type == "Free-for-All":
                                         commit_message=f"Add FFA match to {game_name} history")
 
                     st.success("Free-for-All game recorded successfully!")
+                    st.session_state["ffa_order"] = []  # reset for next game
                 except Exception as e:
                     st.error(f"Failed to record FFA game: {e}")
+
