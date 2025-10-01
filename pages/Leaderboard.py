@@ -46,3 +46,18 @@ if not df.empty:
     st.dataframe(df[["Player", "Skill", "Wins"]], use_container_width=True, hide_index=False)
 else:
     st.info(f"No players yet for {selected_game}. Record a game to start tracking stats!")
+# ---------------- Admin Reset Feature ----------------
+st.markdown("---")
+st.subheader("⚠️ Admin Tools")
+
+admin_code = st.text_input("Enter admin code to unlock reset tools", type="password")
+
+if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # Replace with a secure method later
+    if st.button(f"🔄 Reset Stats for {selected_game}"):
+        for player in leaderboard:
+            leaderboard[player]["mu"] = 25.0
+            leaderboard[player]["sigma"] = 8.333
+            leaderboard[player]["wins"] = 0
+        save_leaderboard_to_git(selected_game, leaderboard, commit_message=f"Reset stats for {selected_game}")
+        st.success(f"{selected_game} stats reset to default!")
+
