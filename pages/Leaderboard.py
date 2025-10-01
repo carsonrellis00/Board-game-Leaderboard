@@ -1,13 +1,8 @@
 # pages/Leaderboard.py
-import sys
 import os
 import streamlit as st
 import pandas as pd
-
-# --- Add root folder to Python path so imports work ---
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from GitLab_Persistence import (
+from board_game_leaderboard.GitLab_Persistence import (
     load_players_from_git,
     save_players_to_git,
     load_leaderboard_from_git,
@@ -38,28 +33,16 @@ selected_game = st.selectbox("Select a game", all_games)
 
 # ---------------- Load leaderboard ----------------
 try:
-    leaderboard = load_leaderboard_from_git(selected_game)
-    if leaderboard is None:
-        leaderboard = {}
+    leaderboard = load_leaderboard_from_git(selected_game) or {}
 except Exception:
     leaderboard = {}
-
-# Ensure leaderboard exists for this game
-if leaderboard is None:
-    leaderboard = {}
-    save_leaderboard_to_git(selected_game, leaderboard)
 
 # ---------------- Convert to DataFrame ----------------
 rows = []
 for player, rating in leaderboard.items():
-    if isinstance(rating, dict):
-        mu = rating.get("mu", 25.0)
-        sigma = rating.get("sigma", 8.333)
-        wins = rating.get("wins", 0)
-    else:
-        mu = 25.0
-        sigma = 8.333
-        wins = 0
+    mu = rating.get("mu", 25.0) if isinstance(rating, dict) else 25.0
+    sigma = rating.get("sigma", 8.333) if isinstance(rating, dict) else 8.333
+    wins = rating.get("wins", 0) if isinstance(rating, dict) else 0
     rows.append({
         "Player": player,
         "Mu": round(mu, 2),
@@ -74,7 +57,6 @@ if not df.empty:
     df = df.sort_values(by="Mu", ascending=False).reset_index(drop=True)
     df.index += 1  # Start rank at 1
     df.index.name = "Rank"
-
     st.dataframe(df[["Player", "Rating", "Wins"]], use_container_width=True, hide_index=False)
 else:
     st.info(f"No players yet for {selected_game}. Record a game to get started!")
