@@ -138,8 +138,11 @@ elif game_type == "1v1":
                     leaderboard.setdefault(p1, {"mu": env.mu, "sigma": env.sigma, "wins": 0})
                     leaderboard.setdefault(p2, {"mu": env.mu, "sigma": env.sigma, "wins": 0})
 
-                    r1 = env.Rating(**leaderboard[p1])
-                    r2 = env.Rating(**leaderboard[p2])
+                   r1 = env.Rating(mu=leaderboard[p1].get("mu", env.mu),
+                sigma=leaderboard[p1].get("sigma", env.sigma))
+r2 = env.Rating(mu=leaderboard[p2].get("mu", env.mu),
+                sigma=leaderboard[p2].get("sigma", env.sigma))
+
                     ranks = [0, 1] if winner == p1 else [1, 0]
 
                     new_ratings = env.rate([[r1], [r2]], ranks=ranks)
