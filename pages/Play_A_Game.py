@@ -162,15 +162,18 @@ elif game_type == "Free For All":
         if st.button("Record FFA Game", key="ffa_record"):
             try:
                 # Prepare ratings in finishing order
-                rating_groups = [[trueskill.Rating(**leaderboard[p])] for p in finishing_order]
-                ranks = list(range(len(rating_groups)))  # first = 0, etc.
-                new_ratings = env.rate(rating_groups, ranks=ranks)
+                ratings = [trueskill.Rating(**leaderboard[p]) for p in finishing_order]
+                ranks = list(range(len(ratings)))  # first = 0, etc.
+                new_ratings = env.rate(ratings, ranks=ranks)
 
                 for p, r in zip(finishing_order, new_ratings):
                     leaderboard[p]["mu"] = r.mu
                     leaderboard[p]["sigma"] = r.sigma
-                    leaderboard[p]["wins"] += 1 if p == finishing_order[0] else 0
+                    # Only first place gets a win
+                    if p == finishing_order[0]:
+                        leaderboard[p]["wins"] += 1
 
+                # Update history
                 history["matches"].append({
                     "timestamp": datetime.utcnow().isoformat(),
                     "type": "ffa",
