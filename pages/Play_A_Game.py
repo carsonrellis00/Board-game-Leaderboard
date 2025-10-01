@@ -104,20 +104,23 @@ elif match_type == "Free-For-All":
 
     if st.button("Record FFA Game"):
         try:
-            ratings = []
+            # Create a separate group for each player
+            rating_groups = []
             for p in selected_players:
                 r = leaderboard.get(p, {"mu": env.mu, "sigma": env.sigma})
-                ratings.append(env.Rating(mu=r["mu"], sigma=r["sigma"]))
+                rating_groups.append([env.Rating(mu=r["mu"], sigma=r["sigma"])])
 
             rank_list = [ranks[p] - 1 for p in selected_players]  # zero-based
-            new_ratings = env.rate(ratings, ranks=rank_list)
+            new_ratings = trueskill.rate(rating_groups, ranks=rank_list)
 
+            # Update leaderboard
             for p, r in zip(selected_players, new_ratings):
                 stats = leaderboard.get(p, {})
-                stats["mu"], stats["sigma"] = r.mu, r.sigma
+                stats["mu"], stats["sigma"] = r[0].mu, r[0].sigma  # r is a list with 1 rating
                 stats["wins"] = stats.get("wins", 0) + (1 if rank_list[selected_players.index(p)] == 0 else 0)
                 leaderboard[p] = stats
 
+            # Update history
             history.setdefault("matches", []).append({
                 "timestamp": datetime.utcnow().isoformat(),
                 "type": "ffa",
@@ -131,6 +134,7 @@ elif match_type == "Free-For-All":
 
         except Exception as e:
             st.error(f"Failed to record FFA game: {e}")
+
 
 # --- Team-based ---
 elif match_type == "Team":
