@@ -3,8 +3,12 @@ import streamlit as st
 import pandas as pd
 import os, json
 from GitLab_Persistence import (
+    load_players_from_git,
+    save_players_to_git,
     load_leaderboard_from_git,
     save_leaderboard_to_git,
+    load_history_from_git,
+    save_history_to_git,
     gitlab_list_leaderboards_dir,
 )
 
@@ -80,3 +84,4 @@ if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # replace with secure meth
     if st.button(f"🔄 Wipe Leaderboard for {selected_game}"):
         save_leaderboard_to_git(selected_game, {})
         st.success(f"{selected_game} leaderboard wiped.")
+
