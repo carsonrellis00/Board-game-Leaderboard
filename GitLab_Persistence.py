@@ -1,41 +1,38 @@
-import os
+# GitLab_Persistence.py
 import json
 import requests
 from urllib.parse import quote, unquote
+import streamlit as st
 
-# --- Configuration ---
-GITLAB_PROJECT_ID = os.getenv("GITLAB_PROJECT_ID")
-GITLAB_TOKEN = os.getenv("GITLAB_TOKEN")
-BRANCH = os.getenv("GITLAB_BRANCH", "main")
+# ---------------- Configuration from Streamlit secrets ----------------
+GITLAB_PROJECT_ID = st.secrets["GITLAB_PROJECT_ID"]
+GITLAB_TOKEN = st.secrets["GITLAB_TOKEN"]
+BRANCH = st.secrets.get("GITLAB_BRANCH", "main")
 
 API_BASE = f"https://gitlab.com/api/v4/projects/{GITLAB_PROJECT_ID}"
 HEADERS = {"PRIVATE-TOKEN": GITLAB_TOKEN}
 
-
-# --- Helpers for clean game names ---
+# ---------------- Helpers for clean game names ----------------
 def _normalize_game_basename(name: str) -> str:
     if not name:
         return name
-    name = os.path.basename(name)
     name = name.replace("+", " ")
     name = unquote(name)
+    name = name.split("/")[-1]  # ensure no folder path
     for suffix in ("_leaderboard.json", "_history.json", ".json"):
         if name.endswith(suffix):
             name = name[: -len(suffix)]
     return name
 
-
 def _leaderboard_path_for_game(game_name: str) -> str:
     base = _normalize_game_basename(game_name)
     return f"leaderboards/{base}_leaderboard.json"
-
 
 def _history_path_for_game(game_name: str) -> str:
     base = _normalize_game_basename(game_name)
     return f"leaderboards/{base}_history.json"
 
-
-# --- GitLab raw file utilities ---
+# ---------------- GitLab raw file utilities ----------------
 def gitlab_raw_get(file_path):
     url_path = quote(file_path, safe="")
     url = f"{API_BASE}/repository/files/{url_path}/raw?ref={BRANCH}"
@@ -47,13 +44,11 @@ def gitlab_raw_get(file_path):
             return 200, resp.text
     return resp.status_code, resp.text
 
-
 def gitlab_file_exists(file_path):
     url_path = quote(file_path, safe="")
     url = f"{API_BASE}/repository/files/{url_path}?ref={BRANCH}"
     resp = requests.get(url, headers=HEADERS, timeout=15)
     return resp.status_code == 200
-
 
 def gitlab_create_or_update_file(file_path, data, commit_message):
     content = json.dumps(data, indent=2, ensure_ascii=False)
@@ -69,24 +64,23 @@ def gitlab_create_or_update_file(file_path, data, commit_message):
         resp = requests.put(api_path, headers=HEADERS, json=payload, timeout=20)
     else:
         resp = requests.post(api_path, headers=HEADERS, json=payload, timeout=20)
+
     if resp.status_code not in (200, 201):
         raise RuntimeError(f"GitLab API error {resp.status_code}: {resp.text}")
     return resp.json()
 
-
-# --- Player list utilities ---
+# ---------------- Player list utilities ----------------
 def load_players_from_git():
     status, data = gitlab_raw_get("leaderboards/players.json")
     if status == 200 and isinstance(data, dict):
-        return data
-    return {"players": []}
+        return data.get("players", [])
+    return []
 
+def save_players_to_git(players_list, commit_message="Update players list"):
+    data = {"players": players_list}
+    gitlab_create_or_update_file("leaderboards/players.json", data, commit_message)
 
-def save_players_to_git(players_dict, commit_message="Update players list"):
-    gitlab_create_or_update_file("leaderboards/players.json", players_dict, commit_message)
-
-
-# --- Leaderboard utilities ---
+# ---------------- Leaderboard utilities ----------------
 def load_leaderboard_from_git(game_name):
     file_path = _leaderboard_path_for_game(game_name)
     status, data = gitlab_raw_get(file_path)
@@ -94,29 +88,13 @@ def load_leaderboard_from_git(game_name):
         return data
     return {}
 
-
 def save_leaderboard_to_git(game_name, leaderboard_dict, commit_message=None):
-    file_path = _leaderboard_path_for_game(game_name)
     if commit_message is None:
         commit_message = f"Update {game_name} leaderboard"
+    file_path = _leaderboard_path_for_game(game_name)
     gitlab_create_or_update_file(file_path, leaderboard_dict, commit_message)
 
-
-# --- List leaderboards on GitLab ---
-def gitlab_list_leaderboards_dir():
-    """
-    List all leaderboard JSON files in GitLab for this project.
-    Returns a list of filenames like 'Chess_leaderboard.json'.
-    """
-    url = f"{API_BASE}/repository/tree?ref={BRANCH}&path=leaderboards"
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    if resp.status_code == 200:
-        files = [f["name"] for f in resp.json() if f["name"].endswith("_leaderboard.json")]
-        return files
-    return []
-
-
-# --- History utilities ---
+# ---------------- History utilities ----------------
 def load_history_from_git(game_name):
     file_path = _history_path_for_game(game_name)
     status, data = gitlab_raw_get(file_path)
@@ -124,9 +102,16 @@ def load_history_from_git(game_name):
         return data
     return {"matches": []}
 
-
 def save_history_to_git(game_name, history_dict, commit_message=None):
-    file_path = _history_path_for_game(game_name)
     if commit_message is None:
         commit_message = f"Update {game_name} history"
+    file_path = _history_path_for_game(game_name)
     gitlab_create_or_update_file(file_path, history_dict, commit_message)
+
+# ---------------- List leaderboards ----------------
+def gitlab_list_leaderboards_dir():
+    url = f"{API_BASE}/repository/tree?ref={BRANCH}&path=leaderboards"
+    resp = requests.get(url, headers=HEADERS, timeout=15)
+    if resp.status_code == 200:
+        return [f["name"] for f in resp.json() if f["name"].endswith("_leaderboard.json")]
+    return []
