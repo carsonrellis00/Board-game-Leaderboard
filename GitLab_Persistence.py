@@ -14,21 +14,11 @@ HEADERS = {"PRIVATE-TOKEN": GITLAB_TOKEN}
 
 # --- Helpers for clean game names ---
 def _normalize_game_basename(name: str) -> str:
-    """
-    Convert a supplied game identifier into a clean basename.
-
-    - Removes known suffixes if present (_leaderboard.json, _history.json, .json)
-    - Converts '+' to spaces and URL-decodes any %XX encodings
-    - Strips any folder components
-    """
     if not name:
         return name
-    # ensure no folder path
     name = os.path.basename(name)
-    # decode URL encodings and plus signs
     name = name.replace("+", " ")
     name = unquote(name)
-    # strip known suffixes
     for suffix in ("_leaderboard.json", "_history.json", ".json"):
         if name.endswith(suffix):
             name = name[: -len(suffix)]
@@ -47,8 +37,7 @@ def _history_path_for_game(game_name: str) -> str:
 
 # --- GitLab raw file utilities ---
 def gitlab_raw_get(file_path):
-    """Return (status_code, parsed_json_or_text)."""
-    url_path = quote(file_path, safe="")  # spaces → %20, no +
+    url_path = quote(file_path, safe="")
     url = f"{API_BASE}/repository/files/{url_path}/raw?ref={BRANCH}"
     resp = requests.get(url, headers=HEADERS, timeout=15)
     if resp.status_code == 200:
@@ -94,9 +83,7 @@ def load_players_from_git():
 
 
 def save_players_to_git(players_dict, commit_message="Update players list"):
-    gitlab_create_or_update_file(
-        "leaderboards/players.json", players_dict, commit_message
-    )
+    gitlab_create_or_update_file("leaderboards/players.json", players_dict, commit_message)
 
 
 # --- Leaderboard utilities ---
@@ -106,11 +93,20 @@ def load_leaderboard_from_git(game_name):
     if status == 200 and isinstance(data, dict):
         return data
     return {}
-    
+
+
+def save_leaderboard_to_git(game_name, leaderboard_dict, commit_message=None):
+    file_path = _leaderboard_path_for_game(game_name)
+    if commit_message is None:
+        commit_message = f"Update {game_name} leaderboard"
+    gitlab_create_or_update_file(file_path, leaderboard_dict, commit_message)
+
+
+# --- List leaderboards on GitLab ---
 def gitlab_list_leaderboards_dir():
     """
     List all leaderboard JSON files in GitLab for this project.
-    Returns a list of filenames (like 'Chess_leaderboard.json').
+    Returns a list of filenames like 'Chess_leaderboard.json'.
     """
     url = f"{API_BASE}/repository/tree?ref={BRANCH}&path=leaderboards"
     resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -118,15 +114,6 @@ def gitlab_list_leaderboards_dir():
         files = [f["name"] for f in resp.json() if f["name"].endswith("_leaderboard.json")]
         return files
     return []
-
-
-def save_leaderboard_to_git(
-    game_name, leaderboard_dict, commit_message=None
-):
-    file_path = _leaderboard_path_for_game(game_name)
-    if commit_message is None:
-        commit_message = f"Update {game_name} leaderboard"
-    gitlab_create_or_update_file(file_path, leaderboard_dict, commit_message)
 
 
 # --- History utilities ---
@@ -143,5 +130,3 @@ def save_history_to_git(game_name, history_dict, commit_message=None):
     if commit_message is None:
         commit_message = f"Update {game_name} history"
     gitlab_create_or_update_file(file_path, history_dict, commit_message)
-
-
