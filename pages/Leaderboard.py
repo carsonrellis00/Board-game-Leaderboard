@@ -3,22 +3,8 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
-import os
-import sys
 
-# 1️⃣ Define ROOT_DIR
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-# 2️⃣ Print debug info
-print("Leaderboard.py dir:", os.path.dirname(__file__))
-print("ROOT_DIR:", ROOT_DIR)
-print("Files in ROOT_DIR:", os.listdir(ROOT_DIR))
-
-# 3️⃣ Add ROOT_DIR to sys.path
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-
-# Add root folder to Python path
+# --- Add root folder to Python path ---
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
@@ -40,9 +26,9 @@ st.title("🏆 Leaderboards")
 # ---------------- Load all games ----------------
 try:
     game_files = gitlab_list_leaderboards_dir()
-    all_games = [f.replace("_leaderboard.json", "") for f in game_files if f.endswith("_leaderboard.json")]
+    all_games = [f.replace("_leaderboard.json", "") for f in game_files]
 except Exception as e:
-    st.error(f"Failed to load games: {e}")
+    st.error(f"Failed to load games from GitLab: {e}")
     all_games = []
 
 if not all_games:
@@ -55,7 +41,8 @@ selected_game = st.selectbox("Select a game", all_games)
 # ---------------- Load leaderboard ----------------
 try:
     leaderboard = load_leaderboard_from_git(selected_game) or {}
-except Exception:
+except Exception as e:
+    st.error(f"Failed to load leaderboard from GitLab: {e}")
     leaderboard = {}
 
 # ---------------- Convert to DataFrame ----------------
@@ -92,6 +79,3 @@ if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # Replace with a secure me
     if st.button(f"🔄 Wipe Leaderboard for {selected_game}"):
         save_leaderboard_to_git(selected_game, {})
         st.success(f"{selected_game} leaderboard wiped.")
-
-
-
