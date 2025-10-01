@@ -1,61 +1,64 @@
 # pages/Leaderboard.py
 import streamlit as st
 import pandas as pd
-from GitLab_Persistence import (
-    load_leaderboard_from_git,
-    gitlab_list_leaderboards_dir,
-    save_leaderboard_to_git
-)
+import sys
 import os
 
-st.set_page_config(page_title="🏆 Leaderboards", page_icon="🏆")
+# --- Root path setup ---
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+from GitLab_Persistence import (
+    load_players_from_git,
+    load_leaderboard_from_git,
+    load_history_from_git,
+    gitlab_list_leaderboards_dir
+)
+
+# --- Streamlit page config ---
+st.set_page_config(page_title="Leaderboard", page_icon="🏆")
 st.title("🏆 Leaderboards")
 
-# ---- Load all games from GitLab ----
+# --- Load all games ---
 try:
     game_files = gitlab_list_leaderboards_dir()
-    all_games = sorted([f.replace("_leaderboard.json", "") for f in game_files])
+    all_games = [f.replace("_leaderboard.json", "") for f in game_files if f.endswith("_leaderboard.json")]
 except Exception as e:
     st.error(f"Failed to load games: {e}")
     all_games = []
 
 if not all_games:
-    st.info("No games found. Add a game by recording a match first.")
+    st.info("No games found. Record a match first to create a game.")
     st.stop()
 
-# ---- Game selection ----
+# --- Game selection ---
 selected_game = st.selectbox("Select a game", all_games)
 
-# ---- Load leaderboard ----
-leaderboard = load_leaderboard_from_git(selected_game) or {}
+# --- Load leaderboard ---
+try:
+    leaderboard = load_leaderboard_from_git(selected_game) or {}
+except Exception:
+    leaderboard = {}
 
-# ---- Convert to DataFrame ----
+# --- Convert to DataFrame for display ---
 rows = []
-for player, rating in leaderboard.items():
-    mu = rating.get("mu", 25.0)
-    sigma = rating.get("sigma", 8.333)
+for player, stats in leaderboard.items():
+    mu = stats.get("mu", 25.0) if isinstance(stats, dict) else 25.0
+    sigma = stats.get("sigma", 8.333) if isinstance(stats, dict) else 8.333
+    wins = stats.get("wins", 0) if isinstance(stats, dict) else 0
     rows.append({
         "Player": player,
-        "Rating": f"{mu:.2f} ± {sigma:.2f}",
-        "Mu": mu,
-        "Sigma": sigma
+        "Skill": f"{mu:.2f} ± {sigma:.2f}",
+        "Wins": wins
     })
 
 df = pd.DataFrame(rows)
+
 if not df.empty:
-    df = df.sort_values(by="Mu", ascending=False).reset_index(drop=True)
+    df = df.sort_values(by="Skill", ascending=False).reset_index(drop=True)
     df.index += 1  # Start rank at 1
     df.index.name = "Rank"
-    st.dataframe(df[["Player", "Rating"]], use_container_width=True)
+    st.dataframe(df[["Player", "Skill", "Wins"]], use_container_width=True, hide_index=False)
 else:
-    st.info(f"No players yet for {selected_game}. Record a game to get started!")
-
-# ---- Admin Wipe Feature ----
-st.markdown("---")
-st.subheader("⚠️ Admin Tools")
-
-admin_code = st.text_input("Enter admin code to unlock reset tools", type="password")
-if admin_code == os.getenv("ADMIN_CODE", "letmein"):
-    if st.button(f"🔄 Wipe Leaderboard for {selected_game}"):
-        save_leaderboard_to_git(selected_game, {})
-        st.success(f"{selected_game} leaderboard wiped.")
+    st.info(f"No players yet for {selected_game}. Record a game to start tracking stats!")
