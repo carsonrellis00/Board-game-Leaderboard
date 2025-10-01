@@ -1,7 +1,12 @@
 # pages/Leaderboard.py
+import sys
+import os
 import streamlit as st
 import pandas as pd
-import os, json
+
+# --- Add root folder to Python path so imports work ---
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from GitLab_Persistence import (
     load_players_from_git,
     save_players_to_git,
@@ -12,14 +17,14 @@ from GitLab_Persistence import (
     gitlab_list_leaderboards_dir,
 )
 
+# ---------------- Streamlit page config ----------------
 st.set_page_config(page_title="Leaderboard", page_icon="🏆")
-
 st.title("🏆 Leaderboards")
 
 # ---------------- Load all games ----------------
 try:
     game_files = gitlab_list_leaderboards_dir()
-    all_games = [f.replace("_leaderboard.json", "") for f in game_files]
+    all_games = [f.replace("_leaderboard.json", "") for f in game_files if f.endswith("_leaderboard.json")]
 except Exception as e:
     st.error(f"Failed to load games: {e}")
     all_games = []
@@ -28,7 +33,7 @@ if not all_games:
     st.info("No games found. Add a game by recording a match first.")
     st.stop()
 
-# Game selection
+# ---------------- Game selection ----------------
 selected_game = st.selectbox("Select a game", all_games)
 
 # ---------------- Load leaderboard ----------------
@@ -40,7 +45,7 @@ except Exception:
     leaderboard = {}
 
 # Ensure leaderboard exists for this game
-if not leaderboard:
+if leaderboard is None:
     leaderboard = {}
     save_leaderboard_to_git(selected_game, leaderboard)
 
@@ -80,8 +85,7 @@ st.subheader("⚠️ Admin Tools")
 
 admin_code = st.text_input("Enter admin code to unlock reset tools", type="password")
 
-if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # replace with secure method later
+if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # Replace with a secure method later
     if st.button(f"🔄 Wipe Leaderboard for {selected_game}"):
         save_leaderboard_to_git(selected_game, {})
         st.success(f"{selected_game} leaderboard wiped.")
-
