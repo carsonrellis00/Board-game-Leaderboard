@@ -14,11 +14,10 @@ from datetime import datetime
 st.set_page_config(page_title="✏️ Record Game / Matchmaking", page_icon="✏️")
 st.title("✏️ Record Game & Matchmaking")
 
-# ---- TrueSkill environment ----
 env = trueskill.TrueSkill(draw_probability=0)
 
-# ---- Load players and games ----
-players = load_players_from_git()  # list of player names
+# --- Load players and games ---
+players = load_players_from_git()
 files = gitlab_list_leaderboards_dir()
 game_names = sorted(list({fn.replace("_leaderboard.json", "").replace("_history.json", "") 
                           for fn in files if fn.endswith("_leaderboard.json") or fn.endswith("_history.json")}))
@@ -36,7 +35,7 @@ if not game_name:
 
 st.subheader(f"Recording for game: {game_name}")
 
-# ---- Load leaderboard and history ----
+# --- Load leaderboard and history (auto-create if missing) ---
 leaderboard = load_leaderboard_from_git(game_name) or {}
 history = load_history_from_git(game_name) or {"matches": []}
 
@@ -44,7 +43,7 @@ if not players:
     st.warning("No global players found. Add players first in Player Manager.")
     st.stop()
 
-# ---- Team-based match recording ----
+# --- Match recording ---
 selected_players = st.multiselect("Select players", options=players)
 if selected_players:
     st.write("Selected Players:", ", ".join(selected_players))
@@ -53,16 +52,16 @@ if selected_players:
     
     if st.button("Record Team Game"):
         try:
-            # Create ratings
+            # Ratings
             ratings = {p: env.Rating(**leaderboard.get(p, {"mu": env.mu, "sigma": env.sigma})) 
                        for p in selected_players}
 
-            # Simple team split for demo: first half team A, second half team B
+            # Simple split
             mid = len(selected_players) // 2
             team_a = selected_players[:mid]
             team_b = selected_players[mid:]
 
-            ranks = [0, 1] if winner == "Team A" else [1, 0]
+            ranks = [0,1] if winner == "Team A" else [1,0]
             new_ratings = env.rate([[ratings[p] for p in team_a],
                                     [ratings[p] for p in team_b]], ranks=ranks)
 
@@ -81,7 +80,7 @@ if selected_players:
                 "winner": winner
             })
 
-            # Push updates to GitLab
+            # Push to GitLab (auto-create files if missing)
             save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record match for {game_name}")
             save_history_to_git(game_name, history, commit_message=f"Update match history for {game_name}")
 
