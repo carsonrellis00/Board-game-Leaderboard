@@ -1,51 +1,38 @@
 # pages/Leaderboard.py
 import streamlit as st
 import pandas as pd
-import sys
-import os
-
-# --- Add root folder to Python path ---
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-
 from GitLab_Persistence import (
-    load_players_from_git,
-    save_players_to_git,
     load_leaderboard_from_git,
     save_leaderboard_to_git,
-    load_history_from_git,
-    save_history_to_git,
-    gitlab_list_leaderboards_dir,
+    gitlab_list_leaderboards_dir
 )
 
-# ---------------- Streamlit page config ----------------
 st.set_page_config(page_title="Leaderboard", page_icon="🏆")
 st.title("🏆 Leaderboards")
 
-# ---------------- Load all games ----------------
+# --- Load all games from GitLab ---
 try:
-    game_files = gitlab_list_leaderboards_dir()
-    all_games = [f.replace("_leaderboard.json", "") for f in game_files]
+    files = gitlab_list_leaderboards_dir()
+    game_names = sorted([f.replace("_leaderboard.json", "") for f in files])
+    st.write("Debug: Games fetched from GitLab:", game_names)
 except Exception as e:
-    st.error(f"Failed to load games from GitLab: {e}")
-    all_games = []
+    st.error(f"Failed to load games: {e}")
+    game_names = []
 
-if not all_games:
+if not game_names:
     st.info("No games found. Add a game by recording a match first.")
     st.stop()
 
-# ---------------- Game selection ----------------
-selected_game = st.selectbox("Select a game", all_games)
+# --- Game selection ---
+selected_game = st.selectbox("Select game", game_names)
 
-# ---------------- Load leaderboard ----------------
+# --- Load leaderboard ---
 try:
-    leaderboard = load_leaderboard_from_git(selected_game) or {}
-except Exception as e:
-    st.error(f"Failed to load leaderboard from GitLab: {e}")
+    leaderboard = load_leaderboard_from_git(selected_game)
+except Exception:
     leaderboard = {}
 
-# ---------------- Convert to DataFrame ----------------
+# --- Convert leaderboard to DataFrame ---
 rows = []
 for player, rating in leaderboard.items():
     mu = rating.get("mu", 25.0) if isinstance(rating, dict) else 25.0
@@ -69,13 +56,12 @@ if not df.empty:
 else:
     st.info(f"No players yet for {selected_game}. Record a game to get started!")
 
-# ---------------- Admin Wipe Feature ----------------
+# --- Admin Wipe Feature ---
 st.markdown("---")
 st.subheader("⚠️ Admin Tools")
-
 admin_code = st.text_input("Enter admin code to unlock reset tools", type="password")
 
-if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # Replace with a secure method later
+if admin_code == st.secrets.get("ADMIN_CODE", "letmein"):  # Use Streamlit secrets for security
     if st.button(f"🔄 Wipe Leaderboard for {selected_game}"):
         save_leaderboard_to_git(selected_game, {})
         st.success(f"{selected_game} leaderboard wiped.")
