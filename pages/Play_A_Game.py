@@ -53,31 +53,62 @@ history.setdefault("matches", [])
 # --- Select match type ---
 match_type = st.radio("Select match type", options=["1v1", "Team", "Free-for-All (FFA)"])
 
-# --- 1v1 Match Recording ---
-if match_type == "1v1":
-    st.header("1v1 Match")
-    p1, p2 = st.selectbox("Player 1", options=players), st.selectbox("Player 2", options=players)
-    winner = st.radio("Winner", options=[p1, p2])
-    if st.button("Record 1v1 Game"):
-        try:
-            ratings = {p: env.Rating(**leaderboard.get(p, {"mu": env.mu, "sigma": env.sigma})) for p in [p1, p2]}
-            ranks = [0, 1] if winner == p1 else [1, 0]
-            new_ratings = env.rate([[ratings[p1]], [ratings[p2]]], ranks=ranks)
-            leaderboard[p1] = {"mu": new_ratings[0][0].mu, "sigma": new_ratings[0][0].sigma,
-                               "wins": leaderboard.get(p1, {}).get("wins", 0) + (1 if winner == p1 else 0)}
-            leaderboard[p2] = {"mu": new_ratings[1][0].mu, "sigma": new_ratings[1][0].sigma,
-                               "wins": leaderboard.get(p2, {}).get("wins", 0) + (1 if winner == p2 else 0)}
-            history["matches"].append({
-                "timestamp": datetime.utcnow().isoformat(),
-                "type": "1v1",
-                "players": [p1, p2],
-                "winner": winner
-            })
-            save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record 1v1 match for {game_name}")
-            save_history_to_git(game_name, history, commit_message=f"Add 1v1 match to {game_name} history")
-            st.success("1v1 match recorded successfully!")
-        except Exception as e:
-            st.error(f"Failed to record 1v1 game: {e}")
+# ---- 1v1 Match Recording ----
+with tab_team:  # You can rename this container if needed
+    st.header("1v1 Game Recording")
+
+    if len(players) < 2:
+        st.warning("At least 2 players are required for a 1v1 match.")
+    else:
+        selected_1v1_players = st.multiselect("Select two players", options=players)
+        if len(selected_1v1_players) == 2:
+            winner = st.radio("Select the winner", options=selected_1v1_players)
+            if st.button("Record 1v1 Game"):
+                try:
+                    # Ensure leaderboard entries exist
+                    p1, p2 = selected_1v1_players
+                    leaderboard.setdefault(p1, {"mu": env.mu, "sigma": env.sigma, "wins": 0})
+                    leaderboard.setdefault(p2, {"mu": env.mu, "sigma": env.sigma, "wins": 0})
+
+                    r1 = env.Rating(**leaderboard[p1])
+                    r2 = env.Rating(**leaderboard[p2])
+                    ranks = [0, 1] if winner == p1 else [1, 0]
+
+                    new_ratings = env.rate([[r1], [r2]], ranks=ranks)
+
+                    # Update leaderboard
+                    leaderboard[p1]["mu"] = new_ratings[0][0].mu
+                    leaderboard[p1]["sigma"] = new_ratings[0][0].sigma
+                    leaderboard[p2]["mu"] = new_ratings[1][0].mu
+                    leaderboard[p2]["sigma"] = new_ratings[1][0].sigma
+
+                    # Increment wins
+                    leaderboard[winner]["wins"] += 1
+
+                    # Ensure history is a dict with 'matches'
+                    if not isinstance(history, dict):
+                        history = {"matches": []}
+                    history.setdefault("matches", [])
+
+                    # Append match to history
+                    history["matches"].append({
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "type": "1v1",
+                        "players": selected_1v1_players,
+                        "winner": winner
+                    })
+
+                    # Push updates to GitLab
+                    save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record 1v1 match for {game_name}")
+                    save_history_to_git(game_name, history, commit_message=f"Add 1v1 match to {game_name} history")
+
+                    st.success("1v1 game recorded successfully!")
+
+                except Exception as e:
+                    st.error(f"Failed to record 1v1 game: {e}")
+        else:
+            st.info("Select exactly two players to record a 1v1 match.")
+
 
 # --- Team Match Recording ---
 elif match_type == "Team":
