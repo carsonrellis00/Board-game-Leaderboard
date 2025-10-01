@@ -20,7 +20,7 @@ env = trueskill.TrueSkill(draw_probability=0)
 
 # ---- Load players and games ----
 players_dict = load_players_from_git() or {"players": []}
-players = players_dict.get("players", [])
+players = players_dict
 files = gitlab_list_leaderboards_dir()
 game_names = sorted(list({fn.replace("_leaderboard.json", "").replace("_history.json", "") 
                           for fn in files if fn.endswith(".json")}))
