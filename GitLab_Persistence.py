@@ -108,15 +108,17 @@ def load_leaderboard_from_git(game_name):
     return {}
     
 def gitlab_list_leaderboards_dir():
-    """Return a list of all leaderboard JSON files in the 'leaderboards/' folder."""
-    try:
-        status, data = gitlab_raw_get("")  # Optional: use GitLab API if you want remote listing
-        # For local testing, you can list local folder
-        if os.path.exists("leaderboards"):
-            return [f for f in os.listdir("leaderboards") if f.endswith("_leaderboard.json")]
-        return []
-    except Exception:
-        return []
+    """
+    List all leaderboard JSON files in GitLab for this project.
+    Returns a list of filenames (like 'Chess_leaderboard.json').
+    """
+    url = f"{API_BASE}/repository/tree?ref={BRANCH}&path=leaderboards"
+    resp = requests.get(url, headers=HEADERS, timeout=15)
+    if resp.status_code == 200:
+        files = [f["name"] for f in resp.json() if f["name"].endswith("_leaderboard.json")]
+        return files
+    return []
+
 
 def save_leaderboard_to_git(
     game_name, leaderboard_dict, commit_message=None
@@ -141,4 +143,5 @@ def save_history_to_git(game_name, history_dict, commit_message=None):
     if commit_message is None:
         commit_message = f"Update {game_name} history"
     gitlab_create_or_update_file(file_path, history_dict, commit_message)
+
 
