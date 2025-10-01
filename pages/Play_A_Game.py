@@ -104,4 +104,10 @@ if selected_players:
                 })
 
                 # Push to GitLab
-                save_leaderboard_to_git(game_name, leaderboa
+                save_leaderboard_to_git(game_name, leaderboard, commit_message=f"Record team match for {game_name}")
+                save_history_to_git(game_name, history, commit_message=f"Add team match to {game_name} history")
+
+                st.success("Team game recorded successfully!")
+
+            except Exception as e:
+                st.error(f"Failed to record game: {e}")
