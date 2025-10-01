@@ -2,7 +2,14 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
-from GitLab_Persistence import load_leaderboard_from_git, gitlab_list_leaderboards_dir
+from GitLab_Persistence import (
+    load_players_from_git,
+    load_leaderboard_from_git,
+    load_history_from_git,
+    save_leaderboard_to_git,   # ← add this
+    gitlab_list_leaderboards_dir
+)
+
 
 # --- Root path setup ---
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -60,4 +67,5 @@ if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # Replace with a secure me
             leaderboard[player]["wins"] = 0
         save_leaderboard_to_git(selected_game, leaderboard, commit_message=f"Reset stats for {selected_game}")
         st.success(f"{selected_game} stats reset to default!")
+
 
