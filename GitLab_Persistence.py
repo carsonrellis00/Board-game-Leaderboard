@@ -70,16 +70,22 @@ def gitlab_create_or_update_file(file_path, data, commit_message):
 # --- Players ---
 # Ensure you always return dicts
 def load_players_from_git():
+    """
+    Always returns a dict with key 'players' mapping to a list,
+    which is compatible with Player Manager and Play_A_Game.
+    """
     try:
         data = gitlab_read_file("leaderboards/players.json")
-        if isinstance(data, list):
-            return {"players": data}  # wrap list into dict
-        elif isinstance(data, dict):
+        if isinstance(data, dict) and "players" in data and isinstance(data["players"], list):
             return data
+        elif isinstance(data, list):
+            # Wrap raw list into proper dict
+            return {"players": data}
         else:
             return {"players": []}
     except Exception:
         return {"players": []}
+
 
 def save_players_to_git(players_dict, commit_message="Update players list"):
     if isinstance(players_dict, list):
@@ -125,4 +131,5 @@ def save_history_to_git(game_name, history_dict, commit_message=None):
     if commit_message is None:
         commit_message = f"Update {game_name} history"
     gitlab_create_or_update_file(file_path, history_dict, commit_message)
+
 
