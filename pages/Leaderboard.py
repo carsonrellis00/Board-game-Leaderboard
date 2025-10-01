@@ -1,8 +1,15 @@
 # pages/Leaderboard.py
-import os
 import streamlit as st
 import pandas as pd
-from board_game_leaderboard.GitLab_Persistence import (
+import sys
+import os
+
+# Add root folder to Python path
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+from GitLab_Persistence import (
     load_players_from_git,
     save_players_to_git,
     load_leaderboard_from_git,
@@ -71,3 +78,4 @@ if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # Replace with a secure me
     if st.button(f"🔄 Wipe Leaderboard for {selected_game}"):
         save_leaderboard_to_git(selected_game, {})
         st.success(f"{selected_game} leaderboard wiped.")
+
