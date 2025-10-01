@@ -5,6 +5,15 @@ from datetime import datetime
 import trueskill
 from openpyxl import Workbook
 import matplotlib.pyplot as plt
+from GitLab_Persistence import (
+    load_players_from_git,
+    save_players_to_git,
+    load_leaderboard_from_git,
+    save_leaderboard_to_git,
+    load_history_from_git,
+    save_history_to_git,
+    gitlab_list_leaderboards_dir,
+)
 
 # ---- Setup TrueSkill Environment ----
 env = trueskill.TrueSkill(draw_probability=0.0)
@@ -338,3 +347,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
