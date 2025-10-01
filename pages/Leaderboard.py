@@ -3,6 +3,10 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+print("Leaderboard.py dir:", os.path.dirname(__file__))
+print("ROOT_DIR:", ROOT_DIR)
+print("Files in ROOT_DIR:", os.listdir(ROOT_DIR))
+
 
 # Add root folder to Python path
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -78,4 +82,5 @@ if admin_code == os.getenv("ADMIN_CODE", "letmein"):  # Replace with a secure me
     if st.button(f"🔄 Wipe Leaderboard for {selected_game}"):
         save_leaderboard_to_git(selected_game, {})
         st.success(f"{selected_game} leaderboard wiped.")
+
 
