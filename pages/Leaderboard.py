@@ -10,9 +10,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from GitLab_Persistence import (
-    load_players_from_git,
     load_leaderboard_from_git,
-    load_history_from_git,
     gitlab_list_leaderboards_dir
 )
 
@@ -49,6 +47,8 @@ for player, stats in leaderboard.items():
     wins = stats.get("wins", 0) if isinstance(stats, dict) else 0
     rows.append({
         "Player": player,
+        "Mu": mu,
+        "Sigma": sigma,
         "Skill": f"{mu:.2f} ± {sigma:.2f}",
         "Wins": wins
     })
@@ -56,7 +56,8 @@ for player, stats in leaderboard.items():
 df = pd.DataFrame(rows)
 
 if not df.empty:
-    df = df.sort_values(by="Skill", ascending=False).reset_index(drop=True)
+    # Sort by Mu descending for ranking
+    df = df.sort_values(by="Mu", ascending=False).reset_index(drop=True)
     df.index += 1  # Start rank at 1
     df.index.name = "Rank"
     st.dataframe(df[["Player", "Skill", "Wins"]], use_container_width=True, hide_index=False)
