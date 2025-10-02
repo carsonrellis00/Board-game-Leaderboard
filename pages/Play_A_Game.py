@@ -90,8 +90,8 @@ elif game_type == "Team":
     selected_players = st.multiselect("Select players for this match", players)
     team_assignment = st.radio("Team assignment method", ["Auto-Balance", "Manual"])
 
+    team1, team2 = [], []
     if selected_players:
-        # Show the teams after auto-balance if chosen
         if team_assignment == "Auto-Balance" and len(selected_players) >= 2:
             sorted_players = sorted(
                 selected_players,
@@ -106,64 +106,62 @@ elif game_type == "Team":
             team1 = st.multiselect("Select Team 1", selected_players)
             team2 = [p for p in selected_players if p not in team1]
 
-    if st.button("Record Team Game"):
-        if len(selected_players) < 2:
-            st.error("Select at least 2 players")
-        else:
-            try:
-                # Ensure all players exist in leaderboard
-                for p in selected_players:
-                    if p not in leaderboard:
-                        leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
+    if team1 and team2:
+        winner_team = st.radio("Winning team", ["Team 1", "Team 2"])
 
-                # Wrap ratings per team for TrueSkill
-                team1_group = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team1]
-                team2_group = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team2]
+        if st.button("Record Team Game"):
+            if len(selected_players) < 2:
+                st.error("Select at least 2 players")
+            else:
+                try:
+                    # Ensure all players exist in leaderboard
+                    for p in selected_players:
+                        if p not in leaderboard:
+                            leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
 
-                # Ask which team won
-                winner_team = st.radio("Winning team", ["Team 1", "Team 2"])
+                    # Wrap ratings per team for TrueSkill
+                    team1_group = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team1]
+                    team2_group = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team2]
 
-                # Rate the teams
-                if winner_team == "Team 1":
-                    rated_teams = env.rate([team1_group, team2_group])
-                else:
-                    rated_teams = env.rate([team2_group, team1_group])
-                    # swap back so team1 maps correctly
-                    rated_teams = rated_teams[::-1]
-
-                rated1, rated2 = rated_teams
-
-                # Update leaderboard
-                for idx, p in enumerate(team1):
-                    leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated1[idx].mu, rated1[idx].sigma
+                    # Rate the teams
                     if winner_team == "Team 1":
-                        leaderboard[p]["wins"] += 1
-                for idx, p in enumerate(team2):
-                    leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated2[idx].mu, rated2[idx].sigma
-                    if winner_team == "Team 2":
-                        leaderboard[p]["wins"] += 1
+                        rated_teams = env.rate([team1_group, team2_group])
+                    else:
+                        rated_teams = env.rate([team2_group, team1_group])
+                        # swap back so team1 maps correctly
+                        rated_teams = rated_teams[::-1]
 
-                # Save leaderboard
-                save_leaderboard_to_git(selected_game, leaderboard)
+                    rated1, rated2 = rated_teams
 
-                # Update history
-                history_entry = {
-                    "type": "team",
-                    "team1": team1,
-                    "team2": team2,
-                    "winner": winner_team
-                }
-                if "matches" not in history:
-                    history["matches"] = []
-                history["matches"].append(history_entry)
-                save_history_to_git(selected_game, history)
+                    # Update leaderboard
+                    for idx, p in enumerate(team1):
+                        leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated1[idx].mu, rated1[idx].sigma
+                        if winner_team == "Team 1":
+                            leaderboard[p]["wins"] += 1
+                    for idx, p in enumerate(team2):
+                        leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated2[idx].mu, rated2[idx].sigma
+                        if winner_team == "Team 2":
+                            leaderboard[p]["wins"] += 1
 
-                st.success("Team game recorded.")
+                    # Save leaderboard
+                    save_leaderboard_to_git(selected_game, leaderboard)
 
-            except Exception as e:
-                st.error(f"Failed to record team game: {e}")
+                    # Update history
+                    history_entry = {
+                        "type": "team",
+                        "team1": team1,
+                        "team2": team2,
+                        "winner": winner_team
+                    }
+                    if "matches" not in history:
+                        history["matches"] = []
+                    history["matches"].append(history_entry)
+                    save_history_to_git(selected_game, history)
 
+                    st.success("Team game recorded.")
 
+                except Exception as e:
+                    st.error(f"Failed to record team game: {e}")
 
 # --- Free-for-All ---
 elif game_type == "Free-for-All":
