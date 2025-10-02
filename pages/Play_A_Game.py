@@ -101,7 +101,7 @@ elif game_type == "Team":
     if team_assignment == "Auto-Balance":
         sorted_players = sorted(
             selected_players,
-            key=lambda p: leaderboard.get(p, {"mu": env.mu})["mu"],
+            key=lambda p: leaderboard[p]["mu"] if isinstance(leaderboard.get(p), dict) and "mu" in leaderboard[p] else env.mu,
             reverse=True
         )
         mid = len(sorted_players) // 2
