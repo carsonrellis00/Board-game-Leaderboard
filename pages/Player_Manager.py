@@ -28,7 +28,7 @@ if st.button("Add Player"):
         players_dict["players"] = player_list
         save_players_to_git(players_dict)
         st.success(f"{new_player.strip()} added.")
-        st.experimental_rerun()   # 🔄 refresh to show immediately
+        st.rerun()   # ✅ correct in modern Streamlit
 
 # --- Remove player ---
 st.subheader("Remove Player")
@@ -39,4 +39,4 @@ if st.button("Remove Player"):
         players_dict["players"] = player_list
         save_players_to_git(players_dict)
         st.success(f"{remove_player} removed.")
-        st.experimental_rerun()   # 🔄 refresh to show immediately
+        st.rerun()   # ✅ correct in modern Streamlit
