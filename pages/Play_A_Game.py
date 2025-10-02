@@ -39,9 +39,22 @@ if not selected_game:
 
 # --- Load leaderboard and history ---
 leaderboard = load_leaderboard_from_git(selected_game)
+
+# --- Normalize leaderboard entries to dicts with mu, sigma, wins ---
+for player, value in list(leaderboard.items()):
+    if isinstance(value, list) and len(value) == 2:  # old format [mu, sigma]
+        leaderboard[player] = {"mu": value[0], "sigma": value[1], "wins": 0}
+    elif isinstance(value, dict):
+        leaderboard[player].setdefault("mu", env.mu)
+        leaderboard[player].setdefault("sigma", env.sigma)
+        leaderboard[player].setdefault("wins", 0)
+    else:
+        leaderboard[player] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
+
 history = load_history_from_git(selected_game)
 if "matches" not in history:
     history["matches"] = []
+
 
 # --- TrueSkill environment ---
 env = trueskill.TrueSkill(draw_probability=0.0)
