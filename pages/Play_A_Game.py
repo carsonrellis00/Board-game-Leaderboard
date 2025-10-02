@@ -177,62 +177,46 @@ elif game_type == "Team":
 # --- Free-for-All ---
 elif game_type == "Free-for-All":
     st.subheader("Free-for-All Match")
-    # Initialize session state for finishing order
-    if "ffa_finishing_order" not in st.session_state:
-        st.session_state.ffa_finishing_order = []
+    selected_players_ffa = st.multiselect("Select players", players)
+    
+    if selected_players_ffa:
+        st.write("Set finishing order:")
+        finishing_order = []
+        remaining_players = selected_players_ffa.copy()
+        for i in range(len(selected_players_ffa)):
+            pick = st.selectbox(f"Finishing position {i+1}", options=remaining_players, key=f"ffa_{i}")
+            if st.button(f"Confirm position {i+1}", key=f"confirm_{i}"):
+                finishing_order.append(pick)
+                remaining_players.remove(pick)
+                st.experimental_rerun()  # refresh so next selection appears
 
-    remaining_players = [p for p in players if p not in st.session_state.ffa_finishing_order]
+        if finishing_order and len(finishing_order) == len(selected_players_ffa):
+            if st.button("Record FFA Game", key="record_ffa"):
+                try:
+                    # Ensure all players exist
+                    for p in finishing_order:
+                        if p not in leaderboard:
+                            leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
+                    # Wrap each rating in its own list for TrueSkill
+                    ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in finishing_order]
+                    ranked_ratings = [[r] for r in ratings]
+                    ranks = list(range(len(finishing_order)))  # 0 = winner
+                    rated = env.rate(ranked_ratings, ranks=ranks)
+                    for idx, p in enumerate(finishing_order):
+                        leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated[idx][0].mu, rated[idx][0].sigma
+                        if idx == 0:
+                            leaderboard[p]["wins"] += 1  # only first place increments wins
+                    save_leaderboard_to_git(selected_game, leaderboard)
+                    history_entry = {
+                        "type": "ffa",
+                        "players": finishing_order,
+                        "winner": finishing_order[0]
+                    }
+                    if "matches" not in history:
+                        history["matches"] = []
+                    history["matches"].append(history_entry)
+                    save_history_to_git(selected_game, history)
+                    st.success("Free-for-All game recorded.")
+                except Exception as e:
+                    st.error(f"Failed to record FFA game: {e}")
 
-    if remaining_players:
-        next_pick = st.selectbox(
-            f"Select next finisher ({len(st.session_state.ffa_finishing_order)+1})",
-            remaining_players,
-            key=f"ffa_pick_{len(st.session_state.ffa_finishing_order)}"
-        )
-        if st.button("Confirm selection", key=f"ffa_confirm_{len(st.session_state.ffa_finishing_order)}"):
-            st.session_state.ffa_finishing_order.append(next_pick)
-            st.experimental_rerun()  # refresh with updated finishing order
-
-    st.write("Finishing order so far:", st.session_state.ffa_finishing_order)
-
-    if st.session_state.ffa_finishing_order and len(st.session_state.ffa_finishing_order) == len(players):
-        if st.button("Record FFA Game", key="record_ffa"):
-            try:
-                # Ensure all players exist
-                for p in st.session_state.ffa_finishing_order:
-                    if p not in leaderboard:
-                        leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
-                
-                # Create TrueSkill ratings
-                ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"])
-                           for p in st.session_state.ffa_finishing_order]
-
-                # Wrap each rating in its own list for trueskill
-                ranked_ratings = [[r] for r in ratings]
-
-                # Rate FFA match using ranks
-                rated = env.rate(ranked_ratings, ranks=list(range(len(st.session_state.ffa_finishing_order))))
-
-                # Update leaderboard
-                for idx, p in enumerate(st.session_state.ffa_finishing_order):
-                    leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated[idx][0].mu, rated[idx][0].sigma
-                    if idx == 0:
-                        leaderboard[p]["wins"] += 1  # winner gets a win
-
-                save_leaderboard_to_git(selected_game, leaderboard)
-
-                # Update history
-                if "matches" not in history:
-                    history["matches"] = []
-                history["matches"].append({
-                    "type": "ffa",
-                    "players": st.session_state.ffa_finishing_order,
-                    "winner": st.session_state.ffa_finishing_order[0]
-                })
-                save_history_to_git(selected_game, history)
-
-                st.success("Free-for-All game recorded.")
-                # Clear finishing order for next match
-                st.session_state.ffa_finishing_order = []
-            except Exception as e:
-                st.error(f"Failed to record FFA game: {e}")
