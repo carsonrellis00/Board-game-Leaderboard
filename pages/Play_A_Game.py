@@ -53,12 +53,9 @@ game_type = st.radio("Select game type", ["1v1", "Team", "Free-for-All"])
 # --- 1v1 ---
 if game_type == "1v1":
     st.subheader("1v1 Match")
-    p1 = st.selectbox("Player 1", players, key="p1_1v1")
-    p2 = st.selectbox("Player 2", [p for p in players if p != p1], key="p2_1v1")
+    p1, p2 = st.selectbox("Player 1", players, key="p1"), st.selectbox("Player 2", players, key="p2")
     
-    winner = st.radio("Winner", [p1, p2], key="winner_1v1")
-    
-    if st.button("Record 1v1 Game", key="record_1v1"):
+    if st.button("Record 1v1 Game"):
         try:
             # Ensure both players exist in leaderboard
             for p in [p1, p2]:
@@ -69,32 +66,38 @@ if game_type == "1v1":
             r1 = env.create_rating(leaderboard[p1]["mu"], leaderboard[p1]["sigma"])
             r2 = env.create_rating(leaderboard[p2]["mu"], leaderboard[p2]["sigma"])
             
-            # Rate the match
+            # Select winner
+            winner = st.radio("Winner", [p1, p2], key="winner_1v1")
+            
+            # Rate both players correctly for TrueSkill
             if winner == p1:
-                rated1, rated2 = env.rate([r1], [r2])
+                rated = env.rate([[r1], [r2]], ranks=[0, 1])
             else:
-                rated2, rated1 = env.rate([r2], [r1])
+                rated = env.rate([[r1], [r2]], ranks=[1, 0])
             
             # Update leaderboard
-            leaderboard[p1]["mu"], leaderboard[p1]["sigma"] = rated1[0].mu, rated1[0].sigma
-            leaderboard[p2]["mu"], leaderboard[p2]["sigma"] = rated2[0].mu, rated2[0].sigma
+            leaderboard[p1]["mu"], leaderboard[p1]["sigma"] = rated[0][0].mu, rated[0][0].sigma
+            leaderboard[p2]["mu"], leaderboard[p2]["sigma"] = rated[1][0].mu, rated[1][0].sigma
             leaderboard[winner]["wins"] += 1
             
+            # Save leaderboard
             save_leaderboard_to_git(selected_game, leaderboard)
             
             # Update history
-            if "matches" not in history:
-                history["matches"] = []
-            history["matches"].append({
+            history_entry = {
                 "type": "1v1",
                 "players": [p1, p2],
                 "winner": winner
-            })
+            }
+            if "matches" not in history:
+                history["matches"] = []
+            history["matches"].append(history_entry)
             save_history_to_git(selected_game, history)
             
             st.success("1v1 game recorded.")
         except Exception as e:
             st.error(f"Failed to record 1v1 game: {e}")
+
 # --- Team ---
 elif game_type == "Team":
     st.subheader("Team Match")
