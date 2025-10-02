@@ -12,6 +12,9 @@ import trueskill
 
 st.title("🎲 Play a Game")
 
+# --- TrueSkill environment ---
+env = trueskill.TrueSkill(draw_probability=0.0)
+
 # --- Load players ---
 players_dict = load_players_from_git()
 players = players_dict.get("players", [])
@@ -37,10 +40,8 @@ if new_game_name.strip():
 if not selected_game:
     st.stop()
 
-# --- Load leaderboard and history ---
+# --- Load leaderboard and normalize old formats ---
 leaderboard = load_leaderboard_from_git(selected_game)
-
-# --- Normalize leaderboard entries to dicts with mu, sigma, wins ---
 for player, value in list(leaderboard.items()):
     if isinstance(value, list) and len(value) == 2:  # old format [mu, sigma]
         leaderboard[player] = {"mu": value[0], "sigma": value[1], "wins": 0}
@@ -55,10 +56,6 @@ history = load_history_from_git(selected_game)
 if "matches" not in history:
     history["matches"] = []
 
-
-# --- TrueSkill environment ---
-env = trueskill.TrueSkill(draw_probability=0.0)
-
 # --- Game type selection ---
 st.subheader("Game Type")
 game_type = st.radio("Select game type", ["1v1", "Team", "Free-for-All"])
@@ -72,10 +69,6 @@ if game_type == "1v1":
     if p1 == p2:
         st.warning("Select two different players.")
         st.stop()
-
-    # Ensure leaderboard is a dict
-    if not isinstance(leaderboard, dict):
-        leaderboard = {}
 
     # Ensure both players exist in leaderboard
     for p in [p1, p2]:
@@ -106,8 +99,6 @@ if game_type == "1v1":
                 "players": [p1, p2],
                 "winner": winner
             }
-            if "matches" not in history:
-                history["matches"] = []
             history["matches"].append(history_entry)
             save_history_to_git(selected_game, history)
 
@@ -150,21 +141,17 @@ elif game_type == "Team":
                         if p not in leaderboard:
                             leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
 
-                    # Wrap ratings per team for TrueSkill
                     team1_group = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team1]
                     team2_group = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team2]
 
-                    # Rate the teams
                     if winner_team == "Team 1":
                         rated_teams = env.rate([team1_group, team2_group])
                     else:
                         rated_teams = env.rate([team2_group, team1_group])
-                        # swap back so team1 maps correctly
                         rated_teams = rated_teams[::-1]
 
                     rated1, rated2 = rated_teams
 
-                    # Update leaderboard
                     for idx, p in enumerate(team1):
                         leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated1[idx].mu, rated1[idx].sigma
                         if winner_team == "Team 1":
@@ -174,18 +161,14 @@ elif game_type == "Team":
                         if winner_team == "Team 2":
                             leaderboard[p]["wins"] += 1
 
-                    # Save leaderboard
                     save_leaderboard_to_git(selected_game, leaderboard)
 
-                    # Update history
                     history_entry = {
                         "type": "team",
                         "team1": team1,
                         "team2": team2,
                         "winner": winner_team
                     }
-                    if "matches" not in history:
-                        history["matches"] = []
                     history["matches"].append(history_entry)
                     save_history_to_git(selected_game, history)
 
@@ -198,7 +181,7 @@ elif game_type == "Team":
 elif game_type == "Free-for-All":
     st.subheader("Free-for-All Match")
     selected_players_ffa = st.multiselect("Select players", players)
-    
+
     if selected_players_ffa:
         st.write("Arrange finishing order (top to bottom):")
         finishing_order = st.multiselect(
@@ -216,43 +199,28 @@ elif game_type == "Free-for-All":
                     for p in finishing_order:
                         if p not in leaderboard:
                             leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
-                    
-                    # Create TrueSkill ratings
+
                     ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in finishing_order]
-                    
-                    # Wrap each rating in a list (TrueSkill expects a list of groups)
                     ranked_ratings = [[r] for r in ratings]
-                    
-                    # Ranks: 0 = winner, 1 = second, etc.
                     ranks = list(range(len(finishing_order)))
-                    
-                    # Compute new ratings
                     rated = env.rate(ranked_ratings, ranks=ranks)
-                    
-                    # Update leaderboard
+
                     for idx, p in enumerate(finishing_order):
-                        # Correctly extract Rating object from inner list
                         new_rating = rated[idx][0]
                         leaderboard[p]["mu"], leaderboard[p]["sigma"] = new_rating.mu, new_rating.sigma
                         if idx == 0:
-                            leaderboard[p]["wins"] += 1  # only winner increments wins
-                    
-                    # Save leaderboard
+                            leaderboard[p]["wins"] += 1
+
                     save_leaderboard_to_git(selected_game, leaderboard)
-                    
-                    # Update history
+
                     history_entry = {
                         "type": "ffa",
                         "players": finishing_order,
                         "winner": finishing_order[0]
                     }
-                    if "matches" not in history:
-                        history["matches"] = []
                     history["matches"].append(history_entry)
                     save_history_to_git(selected_game, history)
-                    
+
                     st.success("Free-for-All game recorded.")
                 except Exception as e:
                     st.error(f"Failed to record FFA game: {e}")
-
-
