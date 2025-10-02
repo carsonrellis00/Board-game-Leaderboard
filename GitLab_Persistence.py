@@ -38,7 +38,7 @@ def gitlab_raw_get(file_path):
     resp = requests.get(url, headers=HEADERS, timeout=15)
     if resp.status_code == 200:
         try:
-            return 200, resp.json()
+            return 200, json.loads(resp.text)
         except Exception:
             return 200, resp.text
     return resp.status_code, resp.text
@@ -67,25 +67,31 @@ def gitlab_create_or_update_file(file_path, data, commit_message):
         raise RuntimeError(f"GitLab API error {resp.status_code}: {resp.text}")
     return resp.json()
 
+# --- NEW: generic file reader ---
+def gitlab_read_file(file_path):
+    status, data = gitlab_raw_get(file_path)
+    if status == 200:
+        try:
+            if isinstance(data, str):
+                return json.loads(data)
+            return data
+        except Exception:
+            return {}
+    return {}
+
 # --- Players ---
-# Ensure you always return dicts
 def load_players_from_git():
-    """
-    Always returns a dict with key 'players' mapping to a list,
-    which is compatible with Player Manager and Play_A_Game.
-    """
+    """Always returns dict with key 'players'."""
     try:
         data = gitlab_read_file("leaderboards/players.json")
         if isinstance(data, dict) and "players" in data and isinstance(data["players"], list):
             return data
         elif isinstance(data, list):
-            # Wrap raw list into proper dict
             return {"players": data}
         else:
             return {"players": []}
     except Exception:
         return {"players": []}
-
 
 def save_players_to_git(players_dict, commit_message="Update players list"):
     if isinstance(players_dict, list):
@@ -131,5 +137,3 @@ def save_history_to_git(game_name, history_dict, commit_message=None):
     if commit_message is None:
         commit_message = f"Update {game_name} history"
     gitlab_create_or_update_file(file_path, history_dict, commit_message)
-
-
