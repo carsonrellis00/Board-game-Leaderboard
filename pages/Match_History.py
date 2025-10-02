@@ -28,14 +28,44 @@ st.subheader(f"Match History for {game_name}")
 
 # Display matches
 for i, match in enumerate(matches[::-1], start=1):
-    ts = datetime.fromisoformat(match["timestamp"]).strftime("%Y-%m-%d %H:%M UTC")
-    if match["type"] == "individual":
-        st.markdown(f"**{i}. {ts}** — Individual: {', '.join(match['results'])}")
-    elif match["type"] == "team":
+    # Safely get timestamp
+    ts = match.get("timestamp")
+    if ts:
+        try:
+            ts = datetime.fromisoformat(ts).strftime("%Y-%m-%d %H:%M UTC")
+        except Exception:
+            ts = "Invalid timestamp"
+    else:
+        ts = "Unknown time"
+
+    match_type = match.get("type", "unknown")
+
+    if match_type == "1v1" or match_type == "individual":
+        results = match.get("players") or match.get("results") or []
+        winner = match.get("winner", "Unknown")
+        st.markdown(f"**{i}. {ts}** — 1v1: {', '.join(results)} (Winner: {winner})")
+
+    elif match_type == "team":
+        team1 = match.get("team1") or match.get("team_a") or []
+        team2 = match.get("team2") or match.get("team_b") or []
+        winner = match.get("winner", "Unknown")
         st.markdown(
             f"**{i}. {ts}** — Team Match:\n"
-            f"- Team A: {', '.join(match['team_a'])}\n"
-            f"- Team B: {', '.join(match['team_b'])}\n"
-            f"- Winner: {match['winner']}"
+            f"- Team 1: {', '.join(team1)}\n"
+            f"- Team 2: {', '.join(team2)}\n"
+            f"- Winner: {winner}"
         )
+
+    elif match_type == "ffa":
+        players = match.get("players", [])
+        winner = match.get("winner", "Unknown")
+        st.markdown(
+            f"**{i}. {ts}** — Free-for-All:\n"
+            f"- Players: {', '.join(players)}\n"
+            f"- Winner: {winner}"
+        )
+
+    else:
+        st.markdown(f"**{i}. {ts}** — Unknown match type")
+
     st.markdown("---")
