@@ -94,13 +94,15 @@ if game_type == "1v1":
 
             save_leaderboard_to_git(selected_game, leaderboard)
 
-            history_entry = {
-                "type": "1v1",
-                "players": [p1, p2],
-                "winner": winner
-            }
-            history["matches"].append(history_entry)
-            save_history_to_git(selected_game, history)
+           history_entry = {
+    "type": "1v1",
+    "players": [p1, p2],
+    "winner": winner,
+    "timestamp": datetime.utcnow().isoformat()  # adds timestamp
+}
+history["matches"].append(history_entry)
+save_history_to_git(selected_game, history)
+
 
             st.success("1v1 game recorded.")
         except Exception as e:
@@ -164,13 +166,15 @@ elif game_type == "Team":
                     save_leaderboard_to_git(selected_game, leaderboard)
 
                     history_entry = {
-                        "type": "team",
-                        "team1": team1,
-                        "team2": team2,
-                        "winner": winner_team
-                    }
-                    history["matches"].append(history_entry)
-                    save_history_to_git(selected_game, history)
+    "type": "team",
+    "team1": team1,
+    "team2": team2,
+    "winner": winner_team,
+    "timestamp": datetime.utcnow().isoformat()  # <-- added timestamp
+}
+history["matches"].append(history_entry)
+save_history_to_git(selected_game, history)
+
 
                     st.success("Team game recorded.")
 
@@ -214,12 +218,14 @@ elif game_type == "Free-for-All":
                     save_leaderboard_to_git(selected_game, leaderboard)
 
                     history_entry = {
-                        "type": "ffa",
-                        "players": finishing_order,
-                        "winner": finishing_order[0]
-                    }
-                    history["matches"].append(history_entry)
-                    save_history_to_git(selected_game, history)
+    "type": "ffa",
+    "players": finishing_order,
+    "winner": finishing_order[0],
+    "timestamp": datetime.utcnow().isoformat()  # <-- added timestamp
+}
+history["matches"].append(history_entry)
+save_history_to_git(selected_game, history)
+
 
                     st.success("Free-for-All game recorded.")
                 except Exception as e:
