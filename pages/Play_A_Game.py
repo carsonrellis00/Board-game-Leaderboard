@@ -30,7 +30,7 @@ except Exception as e:
 
 # Option to enter a new game or pick existing
 new_game_name = st.text_input("Or enter a new game name")
-selected_game = st.selectbox("Select a game", all_games, key="existing_game") if all_games else ""
+selected_game = st.selectbox("Select a game", all_games) if all_games else ""
 if new_game_name.strip():
     selected_game = new_game_name.strip()
 
@@ -40,42 +40,46 @@ if not selected_game:
 # --- Load leaderboard and history ---
 leaderboard = load_leaderboard_from_git(selected_game)
 history = load_history_from_git(selected_game)
+if "matches" not in history:
+    history["matches"] = []
 
 # --- TrueSkill environment ---
 env = trueskill.TrueSkill(draw_probability=0.0)
 
 # --- Game type selection ---
 st.subheader("Game Type")
-game_type = st.radio("Select game type", ["1v1", "Team", "Free-for-All"], key="game_type")
+game_type = st.radio("Select game type", ["1v1", "Team", "Free-for-All"])
 
 # --- 1v1 ---
 if game_type == "1v1":
     st.subheader("1v1 Match")
-    p1, p2 = st.selectbox("Player 1", players, key="p1"), st.selectbox("Player 2", players, key="p2")
-    winner = st.radio("Winner", [p1, p2], key="1v1_winner")
-    if st.button("Record 1v1 Game", key="record_1v1"):
+    p1, p2 = st.selectbox("Player 1", players, key="p1_1v1"), st.selectbox("Player 2", players, key="p2_1v1")
+    winner = st.radio("Winner", [p1, p2], key="winner_1v1")
+    if st.button("Record 1v1 Game"):
         try:
+            # Initialize new players
             for p in [p1, p2]:
                 if p not in leaderboard:
                     leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
+
             r1 = env.create_rating(leaderboard[p1]["mu"], leaderboard[p1]["sigma"])
             r2 = env.create_rating(leaderboard[p2]["mu"], leaderboard[p2]["sigma"])
+
             if winner == p1:
                 rated1, rated2 = env.rate([r1], [r2])
             else:
                 rated2, rated1 = env.rate([r2], [r1])
+
             leaderboard[p1]["mu"], leaderboard[p1]["sigma"] = rated1[0].mu, rated1[0].sigma
             leaderboard[p2]["mu"], leaderboard[p2]["sigma"] = rated2[0].mu, rated2[0].sigma
             leaderboard[winner]["wins"] += 1
+
             save_leaderboard_to_git(selected_game, leaderboard)
 
-            history_entry = {
-                "type": "1v1",
-                "players": [p1, p2],
-                "winner": winner
-            }
-            history.setdefault("matches", []).append(history_entry)
+            history_entry = {"type": "1v1", "players": [p1, p2], "winner": winner}
+            history["matches"].append(history_entry)
             save_history_to_git(selected_game, history)
+
             st.success("1v1 game recorded.")
         except Exception as e:
             st.error(f"Failed to record 1v1 game: {e}")
@@ -85,59 +89,61 @@ elif game_type == "Team":
     st.subheader("Team Match")
     selected_players = st.multiselect("Select players for this match", players, key="team_players")
     team_assignment = st.radio("Team assignment method", ["Auto-Balance", "Manual"], key="team_method")
-    winner_team = st.radio("Winning team", ["Team 1", "Team 2"], key="team_winner")
+    
+    team1, team2 = [], []
+    if team_assignment == "Auto-Balance" and selected_players:
+        # Sort players by skill for auto-balance
+        sorted_players = sorted(
+            selected_players,
+            key=lambda p: leaderboard.get(p, {"mu": env.mu})["mu"],
+            reverse=True
+        )
+        mid = len(sorted_players) // 2
+        team1, team2 = sorted_players[:mid], sorted_players[mid:]
+        st.write(f"Auto-balanced teams:")
+        st.write(f"Team 1: {team1}")
+        st.write(f"Team 2: {team2}")
+    elif team_assignment == "Manual" and selected_players:
+        team1 = st.multiselect("Select Team 1", selected_players, key="manual_team1")
+        team2 = [p for p in selected_players if p not in team1]
+        st.write(f"Team 2: {team2}")
 
-    if st.button("Record Team Game", key="record_team"):
+    if st.button("Record Team Game"):
         if len(selected_players) < 2:
             st.error("Select at least 2 players")
         else:
-            for p in selected_players:
-                if p not in leaderboard:
-                    leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
             try:
-                if team_assignment == "Auto-Balance":
-                    sorted_players = sorted(
-                        selected_players,
-                        key=lambda p: leaderboard.get(p, {}).get("mu", env.mu),
-                        reverse=True
-                    )
-                    mid = len(sorted_players) // 2
-                    team1, team2 = sorted_players[:mid], sorted_players[mid:]
-                else:
-                    team1 = st.multiselect("Select Team 1", selected_players, key="manual_team1")
-                    team2 = [p for p in selected_players if p not in team1]
+                # Initialize new players
+                for p in selected_players:
+                    if p not in leaderboard:
+                        leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
 
                 team1_ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team1]
                 team2_ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team2]
 
-                if len(team1_ratings) == 0 or len(team2_ratings) == 0:
-                    st.error("Each team must have at least one player")
+                winner_team = st.radio("Winning team", ["Team 1", "Team 2"], key="winner_team")
+                if winner_team == "Team 1":
+                    rated1, rated2 = env.rate(team1_ratings, team2_ratings)
                 else:
+                    rated2, rated1 = env.rate(team2_ratings, team1_ratings)
+
+                for idx, p in enumerate(team1):
+                    leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated1[idx].mu, rated1[idx].sigma
                     if winner_team == "Team 1":
-                        rated1, rated2 = env.rate(team1_ratings, team2_ratings)
-                    else:
-                        rated2, rated1 = env.rate(team2_ratings, team1_ratings)
+                        leaderboard[p]["wins"] += 1
 
-                    for idx, p in enumerate(team1):
-                        leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated1[idx].mu, rated1[idx].sigma
-                        if winner_team == "Team 1":
-                            leaderboard[p]["wins"] += 1
-                    for idx, p in enumerate(team2):
-                        leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated2[idx].mu, rated2[idx].sigma
-                        if winner_team == "Team 2":
-                            leaderboard[p]["wins"] += 1
+                for idx, p in enumerate(team2):
+                    leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated2[idx].mu, rated2[idx].sigma
+                    if winner_team == "Team 2":
+                        leaderboard[p]["wins"] += 1
 
-                    save_leaderboard_to_git(selected_game, leaderboard)
+                save_leaderboard_to_git(selected_game, leaderboard)
 
-                    history_entry = {
-                        "type": "team",
-                        "team1": team1,
-                        "team2": team2,
-                        "winner": winner_team
-                    }
-                    history.setdefault("matches", []).append(history_entry)
-                    save_history_to_git(selected_game, history)
-                    st.success("Team game recorded.")
+                history_entry = {"type": "team", "team1": team1, "team2": team2, "winner": winner_team}
+                history["matches"].append(history_entry)
+                save_history_to_git(selected_game, history)
+
+                st.success("Team game recorded.")
             except Exception as e:
                 st.error(f"Failed to record team game: {e}")
 
@@ -146,39 +152,41 @@ elif game_type == "Free-for-All":
     st.subheader("Free-for-All Match")
     finishing_order = []
     remaining_players = players.copy()
-    for i in range(len(players)):
-        pick = st.selectbox(f"Next finisher ({i+1})", remaining_players, key=f"ffa_pick_{i}")
-        if st.button("Confirm selection", key=f"ffa_confirm_{i}"):
-            finishing_order.append(pick)
-            remaining_players.remove(pick)
-            st.experimental_rerun()  # refresh so remaining updates
 
-    winner = finishing_order[0] if finishing_order else None
-    if st.button("Record FFA Game", key="record_ffa") and finishing_order:
+    for idx, _ in enumerate(players):
+        if remaining_players:
+            pick = st.selectbox(
+                f"Select finishing position {len(finishing_order)+1}",
+                remaining_players,
+                key=f"ffa_{len(finishing_order)}"
+            )
+            if st.button("Confirm selection", key=f"ffa_button_{len(finishing_order)}"):
+                finishing_order.append(pick)
+                remaining_players.remove(pick)
+                st.experimental_rerun()
+
+    if finishing_order and st.button("Record FFA Game"):
         try:
+            # Initialize new players
             for p in finishing_order:
                 if p not in leaderboard:
                     leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
 
-            ranked_ratings = [[env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"])] for p in finishing_order]
-            if len(ranked_ratings) > 1:
-                rated = env.rate(ranked_ratings, ranks=list(range(len(finishing_order))))
-                for idx, p in enumerate(finishing_order):
-                    leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated[idx][0].mu, rated[idx][0].sigma
-                    if idx == 0:
-                        leaderboard[p]["wins"] += 1
-            else:
-                st.warning("FFA requires at least 2 players to rate")
+            ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in finishing_order]
+            ranked_ratings = [[r] for r in ratings]  # wrap each rating in list
+            rated = env.rate(ranked_ratings, ranks=list(range(len(finishing_order))))
+
+            for idx, p in enumerate(finishing_order):
+                leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated[idx][0].mu, rated[idx][0].sigma
+                if idx == 0:
+                    leaderboard[p]["wins"] += 1  # only winner
 
             save_leaderboard_to_git(selected_game, leaderboard)
 
-            history_entry = {
-                "type": "ffa",
-                "players": finishing_order,
-                "winner": winner
-            }
-            history.setdefault("matches", []).append(history_entry)
+            history_entry = {"type": "ffa", "players": finishing_order, "winner": finishing_order[0]}
+            history["matches"].append(history_entry)
             save_history_to_git(selected_game, history)
+
             st.success("Free-for-All game recorded.")
         except Exception as e:
             st.error(f"Failed to record FFA game: {e}")
