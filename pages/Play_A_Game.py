@@ -199,7 +199,7 @@ elif game_type == "Free-for-All":
                 st.error("All selected players must be placed in finishing order.")
             else:
                 try:
-                    # Initialize all players in leaderboard if new
+                    # Ensure all players exist in leaderboard
                     for p in finishing_order:
                         if p not in leaderboard:
                             leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
@@ -207,7 +207,7 @@ elif game_type == "Free-for-All":
                     # Create TrueSkill ratings
                     ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in finishing_order]
                     
-                    # Wrap each rating in a list (TrueSkill API expects list of groups)
+                    # Wrap each rating in a list (TrueSkill expects a list of groups)
                     ranked_ratings = [[r] for r in ratings]
                     
                     # Ranks: 0 = winner, 1 = second, etc.
@@ -218,7 +218,9 @@ elif game_type == "Free-for-All":
                     
                     # Update leaderboard
                     for idx, p in enumerate(finishing_order):
-                        leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated[idx][0].mu, rated[idx][0].sigma
+                        # Correctly extract Rating object from inner list
+                        new_rating = rated[idx][0]
+                        leaderboard[p]["mu"], leaderboard[p]["sigma"] = new_rating.mu, new_rating.sigma
                         if idx == 0:
                             leaderboard[p]["wins"] += 1  # only winner increments wins
                     
@@ -239,4 +241,5 @@ elif game_type == "Free-for-All":
                     st.success("Free-for-All game recorded.")
                 except Exception as e:
                     st.error(f"Failed to record FFA game: {e}")
+
 
