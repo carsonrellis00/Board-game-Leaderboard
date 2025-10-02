@@ -184,43 +184,54 @@ elif game_type == "Team":
 # --- Free-for-All ---
 elif game_type == "Free-for-All":
     st.subheader("Free-for-All Match")
-    selected_players_ffa = st.multiselect("Select players", players)
-    
-    if selected_players_ffa:
-        st.write("Arrange finishing order (top to bottom):")
-        finishing_order = st.multiselect(
-            "Finishing order",
-            options=selected_players_ffa,
-            default=selected_players_ffa
-        )
+    finishing_order = []
+    remaining_players = players.copy()
 
+    while remaining_players:
+        pick = st.selectbox(f"Select next finisher ({len(finishing_order)+1})", remaining_players, key=len(finishing_order))
+        if st.button("Confirm selection", key=f"confirm_{len(finishing_order)}"):
+            finishing_order.append(pick)
+            remaining_players.remove(pick)
+            st.experimental_rerun()  # refresh so remaining updates
+
+    if finishing_order:
         if st.button("Record FFA Game"):
-            if len(finishing_order) != len(selected_players_ffa):
-                st.error("All selected players must be placed in finishing order.")
-            else:
-                try:
-                    # Ensure all players exist
-                    for p in finishing_order:
-                        if p not in leaderboard:
-                            leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
-                    ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in finishing_order]
-                    ranked_ratings = [[r] for r in ratings]
-                    ranks = list(range(len(finishing_order)))  # 0 = winner
-                    rated = env.rate(ranked_ratings, ranks=ranks)
-                    for idx, p in enumerate(finishing_order):
-                        leaderboard[p]["mu"], leaderboard[p]["sigma"] = rated[idx][0].mu, rated[idx][0].sigma
-                        if idx == 0:
-                            leaderboard[p]["wins"] += 1  # only winner increments wins
-                    save_leaderboard_to_git(selected_game, leaderboard)
-                    history_entry = {
-                        "type": "ffa",
-                        "players": finishing_order,
-                        "winner": finishing_order[0]
-                    }
-                    if "matches" not in history:
-                        history["matches"] = []
-                    history["matches"].append(history_entry)
-                    save_history_to_git(selected_game, history)
-                    st.success("Free-for-All game recorded.")
-                except Exception as e:
-                    st.error(f"Failed to record FFA game: {e}")
+            try:
+                # Ensure all players exist in leaderboard
+                for p in finishing_order:
+                    if p not in leaderboard:
+                        leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
+
+                # Create TrueSkill ratings for each player
+                ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in finishing_order]
+
+                # Wrap each rating in a list to form separate rating groups
+                rating_groups = [[r] for r in ratings]
+
+                # Rate the game: ranks are based on finishing_order
+                rated = env.rate(rating_groups, ranks=list(range(len(finishing_order))))
+
+                # Update leaderboard with new mu, sigma, and wins
+                for idx, p in enumerate(finishing_order):
+                    leaderboard[p]["mu"] = rated[idx][0].mu
+                    leaderboard[p]["sigma"] = rated[idx][0].sigma
+                    if idx == 0:  # only the winner gets a win
+                        leaderboard[p]["wins"] += 1
+
+                save_leaderboard_to_git(selected_game, leaderboard)
+
+                # Update history
+                history_entry = {
+                    "type": "ffa",
+                    "players": finishing_order,
+                    "winner": finishing_order[0]
+                }
+                if "matches" not in history:
+                    history["matches"] = []
+                history["matches"].append(history_entry)
+                save_history_to_git(selected_game, history)
+
+                st.success("Free-for-All game recorded.")
+            except Exception as e:
+                st.error(f"Failed to record FFA game: {e}")
+
