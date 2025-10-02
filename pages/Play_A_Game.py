@@ -87,53 +87,51 @@ if game_type == "1v1":
 # --- Team ---
 elif game_type == "Team":
     st.subheader("Team Match")
-
-    # Select players for the match
     selected_players = st.multiselect("Select players for this match", players)
-    if len(selected_players) < 2:
-        st.info("Select at least 2 players to form teams.")
-        st.stop()
+    team_assignment = st.radio("Team assignment method", ["Auto-Balance", "Manual"])
 
-    # Choose assignment method
-    team_assignment = st.radio("Team assignment method", ["Auto-Balance", "Manual"], key="team_assignment_method")
+    if selected_players:
+        # Show the teams after auto-balance if chosen
+        if team_assignment == "Auto-Balance" and len(selected_players) >= 2:
+            sorted_players = sorted(
+                selected_players,
+                key=lambda p: leaderboard.get(p, {"mu": env.mu})["mu"],
+                reverse=True
+            )
+            mid = len(sorted_players) // 2
+            team1, team2 = sorted_players[:mid], sorted_players[mid:]
+            st.write("**Team 1:**", ", ".join(team1))
+            st.write("**Team 2:**", ", ".join(team2))
+        elif team_assignment == "Manual":
+            team1 = st.multiselect("Select Team 1", selected_players)
+            team2 = [p for p in selected_players if p not in team1]
 
-    # Determine teams
-    if team_assignment == "Auto-Balance":
-        sorted_players = sorted(
-            selected_players,
-            key=lambda p: leaderboard[p]["mu"] if isinstance(leaderboard.get(p), dict) and "mu" in leaderboard[p] else env.mu,
-            reverse=True
-        )
-        mid = len(sorted_players) // 2
-        team1, team2 = sorted_players[:mid], sorted_players[mid:]
-        st.write("**Auto-balanced Teams:**")
-        st.write(f"Team 1: {', '.join(team1)}")
-        st.write(f"Team 2: {', '.join(team2)}")
-    else:
-        team1 = st.multiselect("Select Team 1", selected_players, key="manual_team1")
-        team2 = [p for p in selected_players if p not in team1]
-        st.write(f"Team 2: {', '.join(team2)}")
-
-    # Only show winner selection if both teams have players
-    if team1 and team2:
-        winner_team = st.radio("Select the winning team", ["Team 1", "Team 2"], key="winner_team")
-
-        if st.button("Record Team Game", key="record_team_game"):
+    if st.button("Record Team Game"):
+        if len(selected_players) < 2:
+            st.error("Select at least 2 players")
+        else:
             try:
                 # Ensure all players exist in leaderboard
                 for p in selected_players:
                     if p not in leaderboard:
                         leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
 
-                # Create TrueSkill ratings
-                team1_ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team1]
-                team2_ratings = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team2]
+                # Wrap ratings per team for TrueSkill
+                team1_group = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team1]
+                team2_group = [env.create_rating(leaderboard[p]["mu"], leaderboard[p]["sigma"]) for p in team2]
 
-                # Rate teams
+                # Ask which team won
+                winner_team = st.radio("Winning team", ["Team 1", "Team 2"])
+
+                # Rate the teams
                 if winner_team == "Team 1":
-                    rated1, rated2 = env.rate([team1_ratings, team2_ratings], ranks=[0, 1])
+                    rated_teams = env.rate([team1_group, team2_group])
                 else:
-                    rated1, rated2 = env.rate([team1_ratings, team2_ratings], ranks=[1, 0])
+                    rated_teams = env.rate([team2_group, team1_group])
+                    # swap back so team1 maps correctly
+                    rated_teams = rated_teams[::-1]
+
+                rated1, rated2 = rated_teams
 
                 # Update leaderboard
                 for idx, p in enumerate(team1):
@@ -160,9 +158,11 @@ elif game_type == "Team":
                 history["matches"].append(history_entry)
                 save_history_to_git(selected_game, history)
 
-                st.success("Team game recorded successfully.")
+                st.success("Team game recorded.")
+
             except Exception as e:
                 st.error(f"Failed to record team game: {e}")
+
 
 
 # --- Free-for-All ---
