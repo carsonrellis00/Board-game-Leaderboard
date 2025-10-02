@@ -95,7 +95,8 @@ if game_type == "1v1":
 
             st.success("1v1 game recorded.")
         except Exception as e:
-            st.error(f"Failed to record 1v1 game: {e}"
+            st.error(f"Failed to record 1v1 game: {e}")
+
 
 # --- Team ---
 elif game_type == "Team":
