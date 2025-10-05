@@ -62,51 +62,37 @@ st.subheader("Game Type")
 game_type = st.radio("Select game type", ["1v1", "Team", "Free-for-All"])
 
 # --- 1v1 ---
-if game_type == "1v1":
-    st.subheader("1v1 Match")
-    p1 = st.selectbox("Player 1", players, key="1v1_p1")
-    p2 = st.selectbox("Player 2", players, key="1v1_p2")
+if st.button("Record 1v1 Game"):
+    try:
+        r1 = env.create_rating(leaderboard[p1]["mu"], leaderboard[p1]["sigma"])
+        r2 = env.create_rating(leaderboard[p2]["mu"], leaderboard[p2]["sigma"])
 
-    if p1 == p2:
-        st.warning("Select two different players.")
-        st.stop()
-
-    # Ensure both players exist in leaderboard
-    for p in [p1, p2]:
-        if p not in leaderboard or not isinstance(leaderboard[p], dict):
-            leaderboard[p] = {"mu": env.mu, "sigma": env.sigma, "wins": 0}
-
-    winner = st.radio("Winner", [p1, p2], key="1v1_winner")
-
-    if st.button("Record 1v1 Game"):
-        try:
-            r1 = env.create_rating(leaderboard[p1]["mu"], leaderboard[p1]["sigma"])
-            r2 = env.create_rating(leaderboard[p2]["mu"], leaderboard[p2]["sigma"])
-
-            # Wrap each player in a list (group) and set ranks
-            if winner == p1:
-                rated = env.rate([[r1], [r2]], ranks=[0, 1])
-            else:
-                rated = env.rate([[r2], [r1]], ranks=[0, 1])
-
+        # Compute new ratings
+        if winner == p1:
+            rated = env.rate([[r1], [r2]], ranks=[0, 1])
             leaderboard[p1]["mu"], leaderboard[p1]["sigma"] = rated[0][0].mu, rated[0][0].sigma
             leaderboard[p2]["mu"], leaderboard[p2]["sigma"] = rated[1][0].mu, rated[1][0].sigma
-            leaderboard[winner]["wins"] += 1
+        else:
+            rated = env.rate([[r2], [r1]], ranks=[0, 1])
+            leaderboard[p2]["mu"], leaderboard[p2]["sigma"] = rated[0][0].mu, rated[0][0].sigma
+            leaderboard[p1]["mu"], leaderboard[p1]["sigma"] = rated[1][0].mu, rated[1][0].sigma
 
-            save_leaderboard_to_git(selected_game, leaderboard)
+        leaderboard[winner]["wins"] += 1
 
-            history_entry = {
-                "type": "1v1",
-                "players": [p1, p2],
-                "winner": winner,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            history["matches"].append(history_entry)
-            save_history_to_git(selected_game, history)
+        save_leaderboard_to_git(selected_game, leaderboard)
 
-            st.success("1v1 game recorded.")
-        except Exception as e:
-            st.error(f"Failed to record 1v1 game: {e}")
+        history_entry = {
+            "type": "1v1",
+            "players": [p1, p2],
+            "winner": winner,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        history["matches"].append(history_entry)
+        save_history_to_git(selected_game, history)
+
+        st.success("1v1 game recorded.")
+    except Exception as e:
+        st.error(f"Failed to record 1v1 game: {e}")
 
 # --- Team ---
 elif game_type == "Team":
