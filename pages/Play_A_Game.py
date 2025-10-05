@@ -84,10 +84,8 @@ if game_type == "1v1":
             r2 = env.create_rating(leaderboard[p2]["mu"], leaderboard[p2]["sigma"])
 
             # Wrap each player in a list (group) and set ranks
-            if winner == p1:
-                rated = env.rate([[r1], [r2]], ranks=[0, 1])
-            else:
-                rated = env.rate([[r2], [r1]], ranks=[0, 1])
+            ranks = [0, 1] if winner == p1 else [1, 0]
+            rated = env.rate([[r1], [r2]], ranks=ranks)
 
             leaderboard[p1]["mu"], leaderboard[p1]["sigma"] = rated[0][0].mu, rated[0][0].sigma
             leaderboard[p2]["mu"], leaderboard[p2]["sigma"] = rated[1][0].mu, rated[1][0].sigma
